@@ -83,17 +83,18 @@ class EventStruct(object):
         self.resetEvtimes()
 
     def _makeFilterDict(self):
-        self._filterDict = {}
-        self._filterDict['highlevel'] = _highlevel
-        self._filterDict['lowlevel'] = _lowlevel
-        self._filterDict['term'] = _term
-        self._filterDict['nonterm'] = _nonterm
-        self._filterDict['active'] = _active
-        self._filterDict['notactive'] = _notactive
-        self._filterDict['varlinked'] = _varlinked
-        self._filterDict['notvarlinked'] = _notvarlinked
-        self._filterDict['precise'] = _precise
-        self._filterDict['notprecise'] = _notprecise
+        self._filterDict = {
+            'highlevel': _highlevel,
+            'lowlevel': _lowlevel,
+            'term': _term,
+            'nonterm': _nonterm,
+            'active': _active,
+            'notactive': _notactive,
+            'varlinked': _varlinked,
+            'notvarlinked': _notvarlinked,
+            'precise': _precise,
+            'notprecise': _notprecise,
+        }
 
     def resetEvtimes(self):
         self.Evtimes = {}
@@ -117,8 +118,9 @@ class EventStruct(object):
                 self.events[ev.name] = ev
             else:
                 print(self)
-                raise ValueError("Event name '"+ev.name+"' already present "
-                                    "in database")
+                raise ValueError(
+                    (f"Event name '{ev.name}" + "' already present " "in database")
+                )
         elif isinstance(ev,list):
             for ev_item in ev:
                 self.__setitem__(ev_item)
@@ -139,68 +141,43 @@ class EventStruct(object):
     def sortedEventNames(self, eventlist=None):
         if eventlist is None:
             return sortedDictKeys(self.events)
-        else:
-            eventlist.sort()
-            return eventlist
+        eventlist.sort()
+        return eventlist
 
     def getHighLevelEvents(self):
-        hlList = []
-        for epair in self.events.items():
-            if isinstance(epair[1], HighLevelEvent):
-                hlList.append(epair)
-        return hlList
+        return [
+            epair
+            for epair in self.events.items()
+            if isinstance(epair[1], HighLevelEvent)
+        ]
 
     def getLowLevelEvents(self):
-        llList = []
-        for epair in self.events.items():
-            if isinstance(epair[1], LowLevelEvent):
-                llList.append(epair)
-        return llList
+        return [
+            epair
+            for epair in self.events.items()
+            if isinstance(epair[1], LowLevelEvent)
+        ]
 
     def getAllEvents(self):
         return list(self.events.items())
 
     def getTermEvents(self):
-        teList = []
-        for epair in self.events.items():
-            if epair[1].termFlag:
-                teList.append(epair)
-        return teList
+        return [epair for epair in self.events.items() if epair[1].termFlag]
 
     def getNonTermEvents(self):
-        neList = []
-        for epair in self.events.items():
-            if not epair[1].termFlag:
-                neList.append(epair)
-        return neList
+        return [epair for epair in self.events.items() if not epair[1].termFlag]
 
     def getActiveEvents(self):
-        neList = []
-        for epair in self.events.items():
-            if epair[1].activeFlag:
-                neList.append(epair)
-        return neList
+        return [epair for epair in self.events.items() if epair[1].activeFlag]
 
     def getNonActiveEvents(self):
-        neList = []
-        for epair in self.events.items():
-            if not epair[1].activeFlag:
-                neList.append(epair)
-        return neList
+        return [epair for epair in self.events.items() if not epair[1].activeFlag]
 
     def getNonPreciseEvents(self):
-        neList = []
-        for epair in self.events.items():
-            if not epair[1].preciseFlag:
-                neList.append(epair)
-        return neList
+        return [epair for epair in self.events.items() if not epair[1].preciseFlag]
 
     def getPreciseEvents(self):
-        neList = []
-        for epair in self.events.items():
-            if epair[1].preciseFlag:
-                neList.append(epair)
-        return neList
+        return [epair for epair in self.events.items() if epair[1].preciseFlag]
 
     def setglobalt0(self, t0):
         for epair in self.events.items():
@@ -223,7 +200,7 @@ class EventStruct(object):
                 return []
             else:
                 eventlist = list(self.events.items())
-        if filterFuncs == []:
+        if not filterFuncs:
             return []
         for f in filterFuncs:
             eventlist = list(filter(f, eventlist))
@@ -264,7 +241,7 @@ class EventStruct(object):
         if eventlist is None:
             eventlist = self.query(['highlevel'])
         if type(state)==list:
-            for i, (ev, s) in enumerate(zip(eventlist, state)):
+            for ev, s in zip(eventlist, state):
                 ev[1].reset(s)
                 ev[1].starttime = t0
         else:
@@ -277,11 +254,12 @@ class EventStruct(object):
         """validateEvents is only used for high level events."""
         assert eventlist != [], 'Empty event list passed to validateEvents'
         for ev in eventlist:
-            if isinstance(ev[1], HighLevelEvent):
-                if not all(key in database for key in ev[1].vars.keys()):
-                    ek = list(ev[1].vars.keys())
-                    print("Missing keys: %r" % (remain(ek, database), ))
-                    raise RuntimeError("Invalid keys in event '%s'" % ev[0])
+            if isinstance(ev[1], HighLevelEvent) and any(
+                key not in database for key in ev[1].vars.keys()
+            ):
+                ek = list(ev[1].vars.keys())
+                print("Missing keys: %r" % (remain(ek, database), ))
+                raise RuntimeError(f"Invalid keys in event '{ev[0]}'")
             #else:
             #    print "Warning: Low level events should not be passed to " \
             #            + "validateEvents()"
@@ -289,121 +267,101 @@ class EventStruct(object):
 
 
     def setTermFlag(self, eventTarget, flagval):
-        if isinstance(flagval, bool):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].termFlag = flagval
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].termFlag = flagval
-        else:
+        if not isinstance(flagval, bool):
             raise TypeError("Invalid flag type")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].termFlag = flagval
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].termFlag = flagval
 
 
     def setActiveFlag(self, eventTarget, flagval):
-        if isinstance(flagval, bool):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].activeFlag = flagval
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].activeFlag = flagval
-        else:
+        if not isinstance(flagval, bool):
             raise TypeError("Invalid flag type")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].activeFlag = flagval
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].activeFlag = flagval
 
     def setPreciseFlag(self, eventTarget, flagval):
-        if isinstance(flagval, bool):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].preciseFlag = flagval
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].preciseFlag = flagval
-        else:
+        if not isinstance(flagval, bool):
             raise TypeError("Invalid flag type")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].preciseFlag = flagval
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].preciseFlag = flagval
 
     def setEventICs(self, eventTarget, val):
-        if isinstance(val, dict):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    for name in val.keys():
-                        if name in self.events[evTarg].initialconditions.keys():
-                            self.events[evTarg].initialconditions[name] = val[name]
-            else:
-                if eventTarget in self.events.keys():
-                    for name in val.keys():
-                        if name in self.events[eventTarget].initialconditions.keys():
-                            self.events[eventTarget].initialconditions[name] = val[name]
-        else:
+        if not isinstance(val, dict):
             raise TypeError("Invalid ICs type -- must be dict of varname, value pairs")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                for name in val.keys():
+                    if name in self.events[evTarg].initialconditions.keys():
+                        self.events[evTarg].initialconditions[name] = val[name]
+        elif eventTarget in self.events.keys():
+            for name in val.keys():
+                if name in self.events[eventTarget].initialconditions.keys():
+                    self.events[eventTarget].initialconditions[name] = val[name]
 
 
     def setEventDelay(self, eventTarget, val):
-        if isinstance(val, int) or isinstance(val, float):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].eventdelay = val
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].eventdelay = val
-        else:
+        if not isinstance(val, (int, float)):
             raise TypeError("Invalid eventdelay type/value")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].eventdelay = val
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].eventdelay = val
 
     def setEventInterval(self, eventTarget, val):
-        if isinstance(val, int) or isinstance(val, float):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].eventinterval = val
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].eventinterval = val
-        else:
+        if not isinstance(val, (int, float)):
             raise TypeError("Invalid eventinterval type/value")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].eventinterval = val
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].eventinterval = val
 
     def setEventTol(self, eventTarget, val):
-        if val > 0:
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].eventtol = val
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].eventtol = val
-        else:
+        if val <= 0:
             raise TypeError("Invalid eventtol type/value")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].eventtol = val
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].eventtol = val
 
     def setEventDir(self, eventTarget, val):
-        if val in [-1,0,1] and isinstance(val, int):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].dircode = val
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].dircode = val
-        else:
+        if val not in [-1, 0, 1] or not isinstance(val, int):
             raise TypeError("Invalid eventdir type/value")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].dircode = val
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].dircode = val
 
     def setStartTime(self, eventTarget, val):
-        if isinstance(val, int) or isinstance(val, float):
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].starttime = val
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].starttime = val
-        else:
+        if not isinstance(val, (int, float)):
             raise TypeError("Invalid starttime type")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].starttime = val
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].starttime = val
 
 
     def setBisect(self, eventTarget, val):
-        if isinstance(val, int) and val > 0:
-            if isinstance(eventTarget, list):
-                for evTarg in intersect(eventTarget, self.events.keys()):
-                    self.events[evTarg].bisectlimit = val
-            else:
-                if eventTarget in self.events.keys():
-                    self.events[eventTarget].bisectlimit = val
-        else:
+        if not isinstance(val, int) or val <= 0:
             raise TypeError("Invalid bisectlimit type/value")
+        if isinstance(eventTarget, list):
+            for evTarg in intersect(eventTarget, self.events.keys()):
+                self.events[evTarg].bisectlimit = val
+        elif eventTarget in self.events.keys():
+            self.events[eventTarget].bisectlimit = val
 
 
 
@@ -421,44 +379,23 @@ class Event(object):
         else:
             raise KeyError('Name must be supplied to event')
         # absolute tolerance for event location (in dependent variable/expression)
-        if 'eventtol' in kw:
-            self.eventtol = kw['eventtol']
-        else:
-            self.eventtol = 1e-9
+        self.eventtol = kw['eventtol'] if 'eventtol' in kw else 1e-9
         # time interval before event detection begins on each run
-        if 'eventdelay' in kw:
-            self.eventdelay = kw['eventdelay']
-        else:
-            self.eventdelay = 1e-3
+        self.eventdelay = kw['eventdelay'] if 'eventdelay' in kw else 1e-3
         # time interval between event detections restart
-        if 'eventinterval' in kw:
-            self.eventinterval = kw['eventinterval']
-        else:
-            self.eventinterval = 1e-3
+        self.eventinterval = kw['eventinterval'] if 'eventinterval' in kw else 1e-3
         # number of bisection steps to take when finding events
-        if 'bisectlimit' in kw:
-            self.bisectlimit = kw['bisectlimit']
-        else:
-            self.bisectlimit = 100
+        self.bisectlimit = kw['bisectlimit'] if 'bisectlimit' in kw else 100
         # terminating event flag
-        if 'term' in kw:
-            self.termFlag = kw['term']
-        else:
-            self.termFlag = False
+        self.termFlag = kw['term'] if 'term' in kw else False
         # active event flag
-        if 'active' in kw:
-            self.activeFlag = kw['active']
-        else:
-            self.activeFlag = True
+        self.activeFlag = kw['active'] if 'active' in kw else True
         # determines whether event must be computed precisely
-        if 'precise' in kw:
-            self.preciseFlag = kw['precise']
-        else:
-            self.preciseFlag = True
+        self.preciseFlag = kw['precise'] if 'precise' in kw else True
         # store 'plain text' definition of event as string, if provided
         if 'expr' in kw:
             assert isinstance(kw['expr'], str), \
-                    "Invalid type for event definition string"
+                        "Invalid type for event definition string"
             self._expr = kw['expr']
         else:
             self._expr = None
@@ -473,53 +410,38 @@ class Event(object):
         except KeyError:
             self.dircode = 0
         # effective time zero for searches (used for eventdelay)
-        if 'starttime' in kw:
-            self.starttime = kw['starttime']
-        else:
-            self.starttime = 0
+        self.starttime = kw['starttime'] if 'starttime' in kw else 0
         # optional variable and parameter bounds information, in case an event
         # wishes to refer to them
         if 'xdomain' in kw:
             assert type(kw['xdomain'])==dict, \
-                    "Invalid type for variable bounds information"
+                        "Invalid type for variable bounds information"
             self.xdomain = kw['xdomain']
         else:
             self.xdomain = {}
         if 'pdomain' in kw:
             assert type(kw['pdomain'])==dict, \
-                    "Invalid type for parameter bounds information"
+                        "Invalid type for parameter bounds information"
             self.pdomain = kw['pdomain']
         else:
             self.pdomain = {}
-        # var dictionary (can be just dict of keys for individual
-        # value calls only) -- only for purely high level events
-        if 'vars' in kw:
-            self.vars = kw['vars']
-            assert len(self.vars) > 0, 'vars dictionary must be non-empty'
-            if all(isinstance(var, Variable) for var in self.vars.values()):
-                self.varlinked = True
-                # doesn't check that only argument is spec'd for _fn method
-            else:
-                self.varlinked = False
-        else:
+        if 'vars' not in kw:
             raise KeyError('vars dictionary not present')
+        self.vars = kw['vars']
+        assert len(self.vars) > 0, 'vars dictionary must be non-empty'
+        self.varlinked = all((isinstance(var, Variable) for var in self.vars.values()))
         # _funcreg is a register of dynamically created Event method names
         # in case of object copying (requiring destruction and re-creation
         # of dynamically created methods)
         self._funcreg = []
         self._funcstr = kw['funcspec'][0]
         self._funcname = kw['funcspec'][1]
-        if 'auxfnspec' in kw:
-            self._fnspecs = ensureStrArgDict(kw['auxfnspec'])
-        else:
-            self._fnspecs = {}
-        if 'noHighLevel' in kw:
-            # Boolean to indicate whether the non-Python event type can make
-            # a high-level image of the event function
-            if not kw['noHighLevel']:
-                self.addMethods()
-        else:
-            # assume is high level
+        self._fnspecs = ensureStrArgDict(kw['auxfnspec']) if 'auxfnspec' in kw else {}
+        if (
+            'noHighLevel' in kw
+            and not kw['noHighLevel']
+            or 'noHighLevel' not in kw
+        ):
             self.addMethods()
         if 'prevsign_IC' in kw:
             # set initial value -- useful for one-off tests or as part of
@@ -548,7 +470,7 @@ class Event(object):
         # event mappings)
         self.evpars = {}
         if 'evpars' in kw:
-            self.evpars.update(kw['evpars'])
+            self.evpars |= kw['evpars']
         # used for quadratic interpolation, if requested in searchForEvents
         self.quadratic = None  #fit_quadratic()
 
@@ -561,18 +483,14 @@ class Event(object):
         try:
             self.queues[qname].append(item)
         except KeyError:
-            raise PyDSTool_ExistError("Queue %s was not declared"%qname)
+            raise PyDSTool_ExistError(f"Queue {qname} was not declared")
         else:
             if qname in self._sorted_queues:
                 self.queues[qname].sort()
 
     def createQ(self, qname, sorted=True, seq=None):
         """Also use to reset a queue."""
-        if seq is None:
-            self.queues[qname] = []
-        else:
-            # ensure list argument (for pop to work)
-            self.queues[qname] = list(seq)
+        self.queues[qname] = [] if seq is None else list(seq)
         if sorted:
             self._sorted_queues.append(qname)
 
@@ -589,22 +507,57 @@ class Event(object):
             pass
 
     def _infostr(self, verbose=1):
-        dirstr = ["decreasing", "either", "increasing"]
         if verbose <= 0:
-            outputStr = "Event "+self.name
-        elif verbose > 0:
-            outputStr = "Event "+self.name+"\n" + \
-                        "  active: " + str(self.activeFlag) + "\n" + \
-                        "  terminal: " + str(self.termFlag) + "\n" + \
-                        "  precise: " + str(self.preciseFlag) + "\n" + \
-                        "  direction: " + dirstr[self.dircode+1] + "\n" + \
-                        "  event tol: " + str(self.eventtol) + "\n" + \
-                        "  definition: " + self._expr
+            outputStr = f"Event {self.name}"
+        else:
+            dirstr = ["decreasing", "either", "increasing"]
+            outputStr = (
+                (
+                    (
+                        (
+                            (
+                                (
+                                    (
+                                        (
+                                            (
+                                                (
+                                                    (
+                                                        (
+                                                            f"Event {self.name}"
+                                                            + "\n"
+                                                            + "  active: "
+                                                        )
+                                                        + str(self.activeFlag)
+                                                        + "\n"
+                                                    )
+                                                    + "  terminal: "
+                                                )
+                                                + str(self.termFlag)
+                                                + "\n"
+                                            )
+                                            + "  precise: "
+                                        )
+                                        + str(self.preciseFlag)
+                                        + "\n"
+                                    )
+                                    + "  direction: "
+                                )
+                                + dirstr[self.dircode + 1]
+                            )
+                            + "\n"
+                        )
+                        + "  event tol: "
+                    )
+                    + str(self.eventtol)
+                    + "\n"
+                )
+                + "  definition: "
+            ) + self._expr
             if verbose >= 2:
                 outputStr += "\n  bisect limit: " + str(self.bisectlimit) \
-                                + "\n" + \
-                                "  event delay: " + str(self.eventdelay) + "\n" +\
-                                "  event interval: " + str(self.eventinterval)
+                                    + "\n" + \
+                                    "  event delay: " + str(self.eventdelay) + "\n" +\
+                                    "  event interval: " + str(self.eventinterval)
         return outputStr
 
     def __eq__(self, other):
@@ -685,18 +638,17 @@ class Event(object):
         """
         assert self.activeFlag, "Event cannot be called when inactivated"
         if varDict is None:
-            if t is not None:
-                assert self.varlinked, ('wrong type of call for non var-'
-                                            ' linked event')
-                if t < self.starttime + self.eventdelay:
-                    return False
-            else:
+            if t is None:
                 raise ValueError('t must be specified for this type of call')
+            assert self.varlinked, ('wrong type of call for non var-'
+                                        ' linked event')
+            if t < self.starttime + self.eventdelay:
+                return False
             if self.prevsign is None:
                 try:
                     self.fval = self._fn(t, parDict)
                 except:
-                    print("Error in event %s" % (self.name, ))
+                    print(f"Error in event {self.name}")
                     info(parDict, "Parameters")
                     raise
                 self.prevsign = numpy.sign(self.fval)
@@ -706,7 +658,7 @@ class Event(object):
                 try:
                     self.fval = self._fn(t, parDict)
                 except:
-                    print("Error in event %s" % (self.name, ))
+                    print(f"Error in event {self.name}")
                     info(parDict, "Parameters")
                     raise
                 sval = numpy.sign(self.fval)
@@ -714,7 +666,7 @@ class Event(object):
                     result = self.prevsign != sval
                 else:
                     result = self.prevsign != sval and \
-                            self.prevsign * self.dircode < 0
+                                self.prevsign * self.dircode < 0
                 self.prevprevsign = self.prevsign
                 self.prevsign = sval
                 return result
@@ -735,7 +687,7 @@ class Event(object):
                 try:
                     self.fval = self._fn(varDict_temp, parDict)
                 except:
-                    print("Error in event %s" % (self.name, ))
+                    print(f"Error in event {self.name}")
                     info(parDict, "Parameters")
                     print("\n")
                     info(varDict_temp, "Variables")
@@ -747,7 +699,7 @@ class Event(object):
                 try:
                     self.fval = self._fn(varDict_temp, parDict)
                 except:
-                    print("Error in event %s" % (self.name, ))
+                    print(f"Error in event {self.name}")
                     info(parDict, "Parameters")
                     print("\n")
                     info(varDict_temp, "Variables")
@@ -757,7 +709,7 @@ class Event(object):
                     result = self.prevsign != sval
                 else:
                     result = self.prevsign != sval and \
-                            self.prevsign * self.dircode < 0
+                                self.prevsign * self.dircode < 0
                 self.prevprevsign = self.prevsign
                 self.prevsign = sval
                 return result
@@ -821,8 +773,8 @@ class Event(object):
                 # trange had better be contained in all var.indepdomain ranges
                 assert len(varDict) > 0, 'varDict was empty!'
                 if not reduce(bool.__and__, [trange[0] in var.indepdomain \
-                                and trange[1] in var.indepdomain for var \
-                                in varDict.values()]):
+                                    and trange[1] in var.indepdomain for var \
+                                    in varDict.values()]):
                     raise ValueError('trange not contained in all var ranges')
             else:
                 raise ValueError('trange must be defined for discrete'
@@ -865,10 +817,7 @@ class Event(object):
             self_caller = self.__call__
         else:
             def test_fn(ts, ps):
-                if ps is None:
-                    pidict = {}
-                else:
-                    pidict = copy.copy(ps)
+                pidict = {} if ps is None else copy.copy(ps)
                 try:
                     for t in ts:
                         idict = dict([(n,i(t+globalt0)) for n,i in inputs.items()])
@@ -886,6 +835,7 @@ class Event(object):
                     pidict.update(idict)
                     fvals = self._fn(ts, pidict)
                 return fvals
+
             def self_caller(t=None, varDict=None, parDict=None):
                 if parDict is None:
                     pidict = dict([(n,i(t+globalt0)) for n,i in inputs.items()])
@@ -893,6 +843,7 @@ class Event(object):
                     pidict = copy.copy(parDict)
                     pidict.update(dict([(n,i(t+globalt0)) for n,i in inputs.items()]))
                 return self(t, varDict=varDict, parDict=pidict)
+
         # before search, check that start after 'eventdelay', if option set
         if eventdelay:
             while tlist[0] <= self.eventdelay:
@@ -909,11 +860,11 @@ class Event(object):
                     boollist = [False]  # initial point is always False
                     if self.dircode == 0:
                         boollist.extend([fvals[i] != fvals[i+1] for i in \
-                                            range(len(fvals)-1)])
+                                                range(len(fvals)-1)])
                     else:
                         boollist.extend([fvals[i] * fvals[i+1] < 0 and \
-                            fvals[i] * self.dircode < 0 for i in \
-                                            range(len(fvals)-1)])
+                                fvals[i] * self.dircode < 0 for i in \
+                                                range(len(fvals)-1)])
                 except:
                     # event does not support vectorized t calls
 ##                    print "Warning: event did not support vectorized t calls"
@@ -940,7 +891,7 @@ class Event(object):
                     boollist.append(self_caller(t=tlist[tix],
                                             varDict=dict(zip(varnames,
                                                             [vallist[i][tix] for\
-                                                    i in range(len(vallist))])),
+                                                        i in range(len(vallist))])),
                                             parDict=parDict))
                 # first bool may be True because event hasn't been called
                 # before and has prevsign unset (or mis-set)...
@@ -954,7 +905,7 @@ class Event(object):
             # for discretevars if not all var.indepdomains equal over trange
             if discretevars:
                 print('Note: All discrete Variables must have identical ' \
-                        'independent variable domains over trange')
+                            'independent variable domains over trange')
             print("Check that all variable references in events are legitimate")
             raise
         # loop through boollist and find all events unless terminating at tpos!
@@ -994,26 +945,15 @@ class Event(object):
 
     def contains(self, interval, val, checklevel=2):
         # NB. val may be another interval
-        if checklevel == 0:
-            # level 0 -- no bounds checking at all
-            # code should avoid calling this function with checklevel = 0
-            # if possible, but this case is left here for completeness and
-            # consistency
-            return True
-        elif checklevel in [1,2]:
-            # level 1 -- ignore uncertain cases (treat as contained)
-            # level 2 -- warn on uncertain and continue (but warnings not
-            #  used in Events, so treat as #1)
-            if interval.contains(val) is not notcontained:
-                return True
-            else:
-                return False
-        else:
-            # level 3 -- exception will be raised for uncertain case
-            if val in interval:
-                return True
-            else:
-                return False
+        return (
+            checklevel != 0
+            and checklevel in [1, 2]
+            and interval.contains(val) is not notcontained
+            or checklevel != 0
+            and checklevel not in [1, 2]
+            and val in interval
+            or checklevel == 0
+        )
 
     def __getstate__(self):
         d = copy.copy(self.__dict__)
@@ -1059,14 +999,14 @@ class LowLevelEvent(Event):
                                     " variable")
         Event.__init__(self, kw)
         assert isinstance(kw['LLfuncspec'], str), \
-                          ("For low level events, must "
+                              ("For low level events, must "
                            "pass string for 'LLfuncspec' in initialization")
         LLfuncstr = kw['LLfuncspec']
         dummyQ = QuantSpec('dummy', LLfuncstr, preserveSpace=True)
         dummyQ.mapNames({'abs': 'fabs', 'sign': 'signum', 'mod': 'fmod'})
         if dummyQ[0] != 'return':
-            print("Found: %s" % (dummyQ[0], ))
-            print("in event specification: %s" % (dummyQ(), ))
+            print(f"Found: {dummyQ[0]}")
+            print(f"in event specification: {dummyQ()}")
             raise ValueError("'return' must be first token in low level "
                                 "event specification")
         # take out 'return' from tokenized because whitespace will be lost
@@ -1091,13 +1031,13 @@ class MatlabEvent(LowLevelEvent):
         kw['noHighLevel'] = True
         Event.__init__(self, kw)
         assert isinstance(kw['Matlabfuncspec'], str), \
-                             ("For low level events, must "
+                                 ("For low level events, must "
                               "pass string for 'LLfuncspec' in initialization")
         LLfuncstr = kw['Matlabfuncspec']
         dummyQ = QuantSpec('dummy', LLfuncstr, preserveSpace=True)
         if dummyQ[0] != 'return':
-            print("Found: %s" % (dummyQ[0], ))
-            print("in event specification: %s" % (dummyQ(), ))
+            print(f"Found: {dummyQ[0]}")
+            print(f"in event specification: {dummyQ()}")
             raise ValueError("'return' must be first token in low level "
                                 "event specification")
         # take out 'return' from tokenized because whitespace will be lost

@@ -174,8 +174,9 @@ class predicate_op(object):
         raise NotImplementedError
 
     def __repr__(self):
-        return self.name + '(' + \
-               ', '.join([repr(p) for p in self.predicates]) + ')'
+        return (
+            f'{self.name}(' + ', '.join([repr(p) for p in self.predicates])
+        ) + ')'
 
 
 class and_op(predicate_op):
@@ -235,11 +236,8 @@ class predicate(object):
         raise NotImplementedError
 
     def __repr__(self):
-        if self.subject is None:
-            s = '<no subject>'
-        else:
-            s = self.subject
-        return self.name + '(' + s + ')'
+        s = '<no subject>' if self.subject is None else self.subject
+        return f'{self.name}({s})'
 
     __str__ = __repr__
 
@@ -333,18 +331,13 @@ def n_sigdigs_str(x, n):
     """Return a string representation of float x with n significant digits,
     where n > 0 is an integer.
     """
-    format = "%." + str(int(n)) + "g"
-    s = '%s' % float(format % x)
+    format = f"%.{int(n)}g"
+    s = f'{float(format % x)}'
     if '.' in s:
         # handle trailing ".0" when not one of the sig. digits
         pt_idx = s.index('.')
-        if s[0] == '-':
-            # pt_idx is one too large
-            if pt_idx-1 >= n:
-                return s[:pt_idx]
-        else:
-            if pt_idx >= n:
-                return s[:pt_idx]
+        if s[0] == '-' and pt_idx - 1 >= n or s[0] != '-' and pt_idx >= n:
+            return s[:pt_idx]
     return s
 
 
@@ -359,30 +352,26 @@ class args(object):
     def _infostr(self, verbose=1, attributeTitle='args',
                  ignore_underscored=False):
         # removed offset=0 from arg list
-        if len(self.__dict__) > 0:
-            res = "%s ("%attributeTitle
-            for k, v in self.__dict__.items():
-                if k[0] == '_' and ignore_underscored:
-                    continue
-                if verbose == 0:
+        if len(self.__dict__) <= 0:
+            return f"No {attributeTitle} defined"
+        res = f"{attributeTitle} ("
+        for k, v in self.__dict__.items():
+            if k[0] == '_' and ignore_underscored:
+                continue
+            if verbose == 0:
                     # don't resolve any deeper
-                    if hasattr(v, 'name'):
-                        name = ' ' + v.name
-                    else:
-                        name = ''
-                    istr = str(type(v)) + name
-                else:
-                    try:
-                        istr = v._infostr(verbose-1) #, offset+2)
-                    except AttributeError:
-                        istr = str(v)
-                res += "\n%s%s = %s,"%(" ",k,istr)
-                # was " "*offset
-            # skip last comma
-            res = res[:-1] + "\n)"
-            return res
-        else:
-            return "No %s defined"%attributeTitle
+                name = f' {v.name}' if hasattr(v, 'name') else ''
+                istr = str(type(v)) + name
+            else:
+                try:
+                    istr = v._infostr(verbose-1) #, offset+2)
+                except AttributeError:
+                    istr = str(v)
+            res += "\n%s%s = %s,"%(" ",k,istr)
+                    # was " "*offset
+        # skip last comma
+        res = res[:-1] + "\n)"
+        return res
 
     def __repr__(self):
         return self._infostr()
@@ -492,7 +481,7 @@ def get_opt(argopt, attr, default=None):
         return getattr(argopt, attr)
     except AttributeError:
         if default is Exception:
-            raise PyDSTool_AttributeError("Missing option: "+attr)
+            raise PyDSTool_AttributeError(f"Missing option: {attr}")
         else:
             return default
 
@@ -528,12 +517,7 @@ class Diagnostics(object):
         self.traceback = {}
         self.outputStatsInfo = outputinfo
         self.outputStats = {}
-        if propagate_dict is None:
-            # use dict so that un-initialized inputs attribute
-            # of generator etc. can be passed-by-reference
-            self.propagate_dict = {}
-        else:
-            self.propagate_dict = propagate_dict
+        self.propagate_dict = {} if propagate_dict is None else propagate_dict
 
     def update(self, d):
         """Update warnings and errors from another diagnostics object"""
@@ -560,11 +544,8 @@ class Diagnostics(object):
             try:
                 obj.diagnostics.clearWarnings()
             except AttributeError:
-                if hasattr(obj, 'name'):
-                    name = obj.name
-                else:
-                    name = str(obj)
-                raise TypeError("Object %s has no diagnostics manager"%name)
+                name = obj.name if hasattr(obj, 'name') else str(obj)
+                raise TypeError(f"Object {name} has no diagnostics manager")
 
     def showWarnings(self):
         if len(self.warnings)>0:
@@ -577,10 +558,10 @@ class Diagnostics(object):
                 dstr = ''
                 for i in range(len(d)):
                     dentry = d[i]
-                    dstr += self._warnfields[w][i] + ' = ' + str(dentry) + ", "
+                    dstr += f'{self._warnfields[w][i]} = {str(dentry)}, '
                 dstr = dstr[:-2]  # drop trailing comma
                 output += ' Warning code %s:  %s\n Info:  %s ' %(w, \
-                                                self._warnmessages[w], dstr)
+                                                    self._warnmessages[w], dstr)
         else:
             output = ''
         return output
@@ -588,10 +569,7 @@ class Diagnostics(object):
     def findWarnings(self, code):
         """Return time-ordered list of warnings of kind specified using a
         single Generator warning code"""
-        res = []
-        for wcode, wdata in self.warnings:
-            if wcode == code:
-                res.append(wdata)
+        res = [wdata for wcode, wdata in self.warnings if wcode == code]
         res.sort()  # increasing order
         return res
 
@@ -607,11 +585,8 @@ class Diagnostics(object):
             try:
                 obj.diagnostics.clearErrors()
             except AttributeError:
-                if hasattr(obj, 'name'):
-                    name = obj.name
-                else:
-                    name = str(obj)
-                raise TypeError("Object %s has no diagnostics manager"%name)
+                name = obj.name if hasattr(obj, 'name') else str(obj)
+                raise TypeError(f"Object {name} has no diagnostics manager")
 
     def showErrors(self):
         if len(self.errors)>0:
@@ -624,10 +599,10 @@ class Diagnostics(object):
                 dstr = ''
                 for i in range(len(d)):
                     dentry = d[i]
-                    dstr += self._errorfields[e][i] + ' = ' + str(dentry) + ", "
+                    dstr += f'{self._errorfields[e][i]} = {str(dentry)}, '
                 dstr = dstr[:-2]  # drop trailing comma
                 output += ' Error code %s:  %s\n Info:\n  %s ' %(e, \
-                                                    self._errmessages[e], dstr)
+                                                        self._errmessages[e], dstr)
         else:
             output = ''
         return output
@@ -674,19 +649,18 @@ def copyVarDict(vardict, only_cts=False):
     Use the only_cts Boolean optional argument (default False) to select only
     continuous-valued variables (mainly for internal use).
     """
-    if only_cts:
-        out_vars = []
-        out_varnames = []
-        sorted_varnames = sortedDictKeys(vardict)
-        for varname in sorted_varnames:
-            var = vardict[varname]
-            if var.is_continuous_valued():
-                out_varnames.append(varname)
-                out_vars.append(var)
-        return dict(zip(out_varnames, out_vars))
-    else:
+    if not only_cts:
         return dict(zip(sortedDictKeys(vardict), [copy(v) for v in \
                                               sortedDictValues(vardict)]))
+    out_vars = []
+    out_varnames = []
+    sorted_varnames = sortedDictKeys(vardict)
+    for varname in sorted_varnames:
+        var = vardict[varname]
+        if var.is_continuous_valued():
+            out_varnames.append(varname)
+            out_vars.append(var)
+    return dict(zip(out_varnames, out_vars))
 
 
 def insertInOrder(sourcelist, inslist, return_ixs=False, abseps=0):
@@ -737,15 +711,15 @@ def insertInOrder(sourcelist, inslist, return_ixs=False, abseps=0):
                 else:
                     close_ixs.append((t,tix-1))
         if was_array:
-            if abseps > 0:
-                return array(sorted_sourcelist), ins_ixs, dict(close_ixs)
-            else:
-                return array(sorted_sourcelist), ins_ixs
+            return (
+                (array(sorted_sourcelist), ins_ixs, dict(close_ixs))
+                if abseps > 0
+                else (array(sorted_sourcelist), ins_ixs)
+            )
+        if abseps > 0:
+            return sorted_sourcelist, ins_ixs, dict(close_ixs)
         else:
-            if abseps > 0:
-                return sorted_sourcelist, ins_ixs, dict(close_ixs)
-            else:
-                return sorted_sourcelist, ins_ixs
+            return sorted_sourcelist, ins_ixs
     else:
         for t in sorted_inslist:
             tcond = less_equal(sorted_sourcelist[tix:], t).tolist()
@@ -762,15 +736,15 @@ def insertInOrder(sourcelist, inslist, return_ixs=False, abseps=0):
                 else:
                     close_ixs.append((t,tix-1))
         if was_array:
-            if abseps > 0:
-                return array(sorted_sourcelist), dict(close_ixs)
-            else:
-                return array(sorted_sourcelist)
+            return (
+                (array(sorted_sourcelist), dict(close_ixs))
+                if abseps > 0
+                else array(sorted_sourcelist)
+            )
+        if abseps > 0:
+            return sorted_sourcelist, dict(close_ixs)
         else:
-            if abseps > 0:
-                return sorted_sourcelist, dict(close_ixs)
-            else:
-                return sorted_sourcelist
+            return sorted_sourcelist
 
 
 def simplifyMatrixRepr(m):
@@ -802,13 +776,13 @@ def makeMultilinearRegrFn(arg, xs, ys):
     argname = str(arg)
 
     def sub_str(a,b):
-        return '(' + str(a) + '-' + str(b) + ')'
+        return f'({str(a)}-{str(b)})'
+
     def sub_val(a,b):
         return repr(a-b)
 
     def interp(n):
-        return rep_y(ys[n-1]) +'+(' + argname + '-(' + rep_x(xs[n-1]) \
-          + '))*' + sub_y(ys[n],ys[n-1]) +'/'+ sub_x(xs[n],xs[n-1])
+        return f'{rep_y(ys[n - 1])}+({argname}-({rep_x(xs[n - 1])}))*{sub_y(ys[n], ys[n - 1])}/{sub_x(xs[n], xs[n - 1])}'
 
     x_test = [isinstance(xs[n], _num_types) for n in range(len(xs))]
     if all(x_test):
@@ -830,9 +804,12 @@ def makeMultilinearRegrFn(arg, xs, ys):
     else:
         rep_y = lambda y: str(y)
         sub_y = sub_str
-    mLR = '+'.join(['heav(%s-%s)*(1-heav(%s-%s))*(%s)'%(argname, \
-                     rep_x(xs[n-1]),argname,rep_x(xs[n]),interp(n)) \
-                   for n in range(1,len(xs))])
+    mLR = '+'.join(
+        [
+            f'heav({argname}-{rep_x(xs[n - 1])})*(1-heav({argname}-{rep_x(xs[n])}))*({interp(n)})'
+            for n in range(1, len(xs))
+        ]
+    )
     return ([argname], mLR)
 
 
@@ -844,7 +821,7 @@ def _scalar_diff(func, x0, dx):
     max_order = 10
     BIG = 1e50
     CON = 1.4
-    CON2 = CON*CON
+    CON2 = CON**2
     SAFE = 2
     a=zeros((max_order,max_order),'f')
     a[0,0] = (func(x0+dx)-func(x0-dx))/(2.*dx)
@@ -927,8 +904,9 @@ def diff(func, x0, vars=None, axes=None, eps=None, output=None):
             assert all(v >= 0 for v in vars), \
                     "vars argument must hold non-negative integers"
         else:
-            assert all([isinstance(vars[i], str) \
-                 for i in range(len(vars))]), "vars argument must hold strings"
+            assert all(
+                isinstance(vars[i], str) for i in range(len(vars))
+            ), "vars argument must hold strings"
         dim = len(vars)
     fx0 = func(x0)
     sfx0 = shape(fx0)
@@ -937,9 +915,8 @@ def diff(func, x0, vars=None, axes=None, eps=None, output=None):
         assert sfx0[1] == 1
     except IndexError:
         # if shape is of form (D,) then that's fine
-        if len(sfx0) > 0:
-            if sfx0[0] == 0:
-                raise TypeError("Invalid function return type")
+        if len(sfx0) > 0 and sfx0[0] == 0:
+            raise TypeError("Invalid function return type")
     except AssertionError:
         print("fx0 shape is %d" % sfx0)
         print(fx0)
@@ -976,8 +953,9 @@ def diff(func, x0, vars=None, axes=None, eps=None, output=None):
             assert all(a>= 0 for a in axes), \
                    "axes argument must hold non-negative integers"
         else:
-            assert all([isinstance(axes[i], str) \
-                 for i in range(len(axes))]), "axes argument must hold strings"
+            assert all(
+                isinstance(axes[i], str) for i in range(len(axes))
+            ), "axes argument must hold strings"
     if eps is None:
         eps = sqrt(Macheps)
     else:

@@ -7,6 +7,7 @@
       modified by R. Clewley.
 """
 
+
 # IMPORTS
 from .errors import *
 from .common import *
@@ -82,7 +83,7 @@ scipy_specialfns = ['airy', 'airye', 'ai_zeros', 'bi_zeros', 'ellipj',
             'exp2', 'radian', 'cosdg', 'sindg', 'tandg', 'cotdg',
             'log1p', 'expm1', 'cosm1', 'round']
 protected_scipynames = ['sign', 'mod']
-protected_specialfns = ['special_'+s for s in scipy_specialfns]
+protected_specialfns = [f'special_{s}' for s in scipy_specialfns]
 protected_mathnames = [s for s in dir(math) if not s.startswith('__')]
 protected_randomnames = [s for s in dir(random) if not s.startswith('_')] # yes, just single _
 protected_builtins = ['abs', 'pow', 'min', 'max', 'sum', 'and', 'not', 'or']
@@ -160,11 +161,7 @@ alphanumeric_chars_RE = re.compile(r'[a-zA-Z0-9]')   # without the '_'
 alphabet_chars_RE = re.compile(r'[a-zA-Z]')
 num_chars = [str(i) for i in range(10)]
 
-if DO_POW:
-    POW_STR = 'pow(%s,%s)'
-else:
-    POW_STR = '%s**%s'
-
+POW_STR = 'pow(%s,%s)' if DO_POW else '%s**%s'
 if DO_DEC:
     ZEROS = ['0','0.0','0.','(0)','(0.0)','(0.)']
     ONES = ['1','1.0','1.','(1)','(1.0)','(1.)']
@@ -200,20 +197,18 @@ def mapPowStr(t, p='**'):
         lpart = dopower(ensureparen(ast2string(toDoubleStarSyntax(string2ast(ll[0]))),1),
                        ensureparen(ast2string(toDoubleStarSyntax(string2ast(ll[1]))),1),
                        '%s**%s')
-        if len(t) > 3:
-            res = ensureparen(ast2string(toDoubleStarSyntax(['power',string2ast('__LPART__')]+t[3:])))
-            return res.replace('__LPART__', lpart)
-        else:
+        if len(t) <= 3:
             return ensureparen(lpart,1)
+        res = ensureparen(ast2string(toDoubleStarSyntax(['power',string2ast('__LPART__')]+t[3:])))
+        return res.replace('__LPART__', lpart)
     elif p=='^':
         lpart = dopower(ensureparen(ast2string(toCircumflexSyntax(string2ast(ll[0]))),1),
                        ensureparen(ast2string(toCircumflexSyntax(string2ast(ll[1]))),1),
                        '%s^%s')
-        if len(t) > 3:
-            res = ensureparen(ast2string(toCircumflexSyntax(['power',string2ast('__LPART__')]+t[3:])),1)
-            return res.replace('__LPART__', lpart)
-        else:
+        if len(t) <= 3:
             return ensureparen(lpart,1)
+        res = ensureparen(ast2string(toCircumflexSyntax(['power',string2ast('__LPART__')]+t[3:])),1)
+        return res.replace('__LPART__', lpart)
     elif p=='pow':
         lpart = dopower(ensurebare(ast2string(toPowSyntax(string2ast(ll[0])))),
                        ensurebare(ast2string(toPowSyntax(string2ast(ll[1])))),
@@ -229,14 +224,13 @@ def mapPowStr(t, p='**'):
 
 def toCircumflexSyntax(t):
     # R. Clewley
-    if isinstance(t[0], str):
-        if t[0] in ['power', 'atom_expr']:
-            if t[2][0] == 'DOUBLESTAR':
-                return string2ast(ensureparen(dopower(ast2string(toCircumflexSyntax(t[1])),
-                                    ast2string(toCircumflexSyntax(t[3])),
-                         '%s^%s'),1))
-            if t[1] == ['NAME', 'pow']:
-                return string2ast(ensureparen(mapPowStr(t,'^'),1))
+    if isinstance(t[0], str) and t[0] in ['power', 'atom_expr']:
+        if t[2][0] == 'DOUBLESTAR':
+            return string2ast(ensureparen(dopower(ast2string(toCircumflexSyntax(t[1])),
+                                ast2string(toCircumflexSyntax(t[3])),
+                     '%s^%s'),1))
+        if t[1] == ['NAME', 'pow']:
+            return string2ast(ensureparen(mapPowStr(t,'^'),1))
     o = []
     for i in t:
         if isinstance(i,list):
@@ -328,13 +322,13 @@ def toPowSyntax(t):
 def temp_macro_names(s):
     t = s
     for m in convert_power_reserved_keywords:
-        t = t.replace(m, '__'+m+'__')
+        t = t.replace(m, f'__{m}__')
     return t
 
 def temp_macro_names_inv(s):
     t = s
     for m in convert_power_reserved_keywords:
-        t = t.replace('__'+m+'__', m)
+        t = t.replace(f'__{m}__', m)
     return t
 
 
@@ -413,19 +407,14 @@ def ast2shortlist(t):
     if not isinstance(t, list): return t
     if t[1] == '': return None
     if not isinstance(t[1], list): return t
-    if len(t) == 2 and isinstance(t[1], list):
+    if len(t) == 2:
         return ast2shortlist(t[1])
-    o=[]
-    for tt in map(ast2shortlist, t[1:]):
-        if tt is not None:
-            o.append(tt)
-    if len(o)==1: return o[0]
-    return [t[0]]+o
+    o = [tt for tt in map(ast2shortlist, t[1:]) if tt is not None]
+    return o[0] if len(o)==1 else [t[0]]+o
 
 def sym2name(t):
     if type(t) is parser.STType: return sym2name(t.tolist())
-    if not isinstance(t, list): return t
-    return [syms[t[0]]]+list(map(sym2name,t[1:]))
+    return [syms[t[0]]]+list(map(sym2name,t[1:])) if isinstance(t, list) else t
 
 def string2ast(t):
     return sym2name(ast2shortlist(parser.expr(t)))
@@ -444,10 +433,7 @@ def ast2string(t):
 def splitastLR(t):
     lft=t[1]
     rt=t[3:]
-    if len(rt)>1:
-        rt=[t[0]]+rt
-    else:
-        rt=rt[0]
+    rt = [t[0]]+rt if len(rt)>1 else rt[0]
     return lft,rt
 
 def dopower(l,r,pow_str=POW_STR):
@@ -456,11 +442,13 @@ def dopower(l,r,pow_str=POW_STR):
     if l in ONES: return '1'
     if r in ONES: return l
     if pow_str=='%s**%s':
-        return trysimple('%s**%s'%(ensureparen(l),ensureparen(r)))
+        return trysimple(f'{ensureparen(l)}**{ensureparen(r)}')
     elif pow_str == '%s^%s':
-        return trysimple('%s^%s'%(ensuredecimalconst(ensureparen(l)),ensuredecimalconst(ensureparen(r))))
+        return trysimple(
+            f'{ensuredecimalconst(ensureparen(l))}^{ensuredecimalconst(ensureparen(r))}'
+        )
     elif pow_str == 'pow(%s,%s)':
-        return trysimple('pow(%s,%s)'%(l,r)) #trysimple('pow(%s,%s)'%(ensurebare(l),ensurebare(r)))
+        return trysimple(f'pow({l},{r})')
     else:
         raise ValueError("Invalid target power syntax")
 
@@ -468,20 +456,14 @@ def domul(l,r):
     if l in ZEROS or r in ZEROS: return '0'
     if l in ONES: return r
     if r in ONES: return l
-    if l in ['-'+o for o in ONES]: return doneg(r)
-    if r in ['-'+o for o in ONES]: return doneg(l)
+    if l in [f'-{o}' for o in ONES]: return doneg(r)
+    if r in [f'-{o}' for o in ONES]: return doneg(l)
     lft = string2ast(l)
     rt = string2ast(r)
     lft_neg = lft[0] == 'factor' and lft[1][0]=='MINUS'
     rt_neg = rt[0] == 'factor' and rt[1][0]=='MINUS'
-    if lft_neg:
-        new_l = l[1:]
-    else:
-        new_l = l
-    if rt_neg:
-        new_r = r[1:]
-    else:
-        new_r = r
+    new_l = l[1:] if lft_neg else l
+    new_r = r[1:] if rt_neg else r
     if lft_neg and rt_neg or not (lft_neg or rt_neg):
         return trysimple('%s*%s'%(ensureparen(new_l,ismul=1),
                                   ensureparen(new_r,ismul=1)))
@@ -494,20 +476,14 @@ def dodiv(l,r):
     if l in ZEROS: return '0'
     if r in ONES: return l
 ##    if l in ['-'+o for o in ONES]: return doneg(dodiv('1',r))
-    if r in ['-'+o for o in ONES]: return doneg(l)
+    if r in [f'-{o}' for o in ONES]: return doneg(l)
     if r==l: return '1'
     lft = string2ast(l)
     rt = string2ast(r)
     lft_neg = lft[0] == 'factor' and lft[1][0]=='MINUS'
     rt_neg = rt[0] == 'factor' and rt[1][0]=='MINUS'
-    if lft_neg:
-        new_l = l[1:]
-    else:
-        new_l = l
-    if rt_neg:
-        new_r = r[1:]
-    else:
-        new_r = r
+    new_l = l[1:] if lft_neg else l
+    new_r = r[1:] if rt_neg else r
     if lft_neg and rt_neg or not (lft_neg or rt_neg):
         return trysimple('%s/%s'%(ensureparen(ensuredecimalconst(new_l),ismul=1,do_decimal=DO_DEC),
                                ensureparen(ensuredecimalconst(new_r),1,do_decimal=DO_DEC)),
@@ -518,20 +494,20 @@ def dodiv(l,r):
                          do_decimal=DO_DEC)
 
 def doadd(l,r):
-    if l in ZEROS and r in ZEROS: return '0'
-    if l in ZEROS: return r
+    if l in ZEROS:
+        return '0' if r in ZEROS else r
     if r in ZEROS: return l
     if l==r: return trysimple(domul('2',l))
-    if r[0]=='-': return trysimple('%s%s'%(l,r))
-    return trysimple('%s+%s'%(l,r))
+    return trysimple(f'{l}{r}') if r[0]=='-' else trysimple(f'{l}+{r}')
 
 def dosub(l,r):
-    if l in ZEROS and r in ZEROS: return '0'
-    if l in ZEROS: return doneg(r)
+    if l in ZEROS:
+        return '0' if r in ZEROS else doneg(r)
     if r in ZEROS: return l
     if l==r: return '0'
-    if r[0]=='-': return ensureparen(trysimple('%s+%s'%(l,doneg(r))))
-    return trysimple('%s-%s'%(l,r))
+    if r[0]=='-':
+        return ensureparen(trysimple(f'{l}+{doneg(r)}'))
+    return trysimple(f'{l}-{r}')
 
 def doneg(l):
     if l in ZEROS: return '0'
@@ -560,7 +536,7 @@ def doneg(l):
         return ast2string(tc)
     if t[0]=='factor' and t[1][0] == 'MINUS':
         return ast2string(t[2])
-    return trysimple('-%s'%l)
+    return trysimple(f'-{l}')
 
 def ensuredecimalconst(t):
     return trysimple(t,do_decimal=DO_DEC)
@@ -570,14 +546,11 @@ def trysimple(t,do_decimal=False):
         t_e = eval(t, {}, {})
         add_point = do_decimal and t_e != 0 and DO_DEC
         if type(t_e) == int and add_point:
-            t = repr(t_e)+".0"
+            t = f"{repr(t_e)}.0"
         elif type(t_e) == float and int(t_e)==t_e:
             # explicitly use repr here in case t string was e.g. '2e7'
             # which evals to a float, but the string itself represents an int
-            if add_point:
-                t = repr(t_e)
-            else:
-                t = repr(int(t_e))
+            t = repr(t_e) if add_point else repr(int(t_e))
         else:
             t = repr(t_e)
     except:
@@ -586,9 +559,12 @@ def trysimple(t,do_decimal=False):
 
 def ensureparen_div(tt):
     if tt[0] == 'term' and tt[2][0] == 'SLASH' and len(tt[3:])>1:
-        return ['term',
-                string2ast(ensureparen(ast2string(tt[1])+'/'+ast2string(tt[3]),
-                                       1))] + tt[4:]
+        return [
+            'term',
+            string2ast(
+                ensureparen(f'{ast2string(tt[1])}/{ast2string(tt[3])}', 1)
+            ),
+        ] + tt[4:]
     else:
         return tt
 
@@ -596,33 +572,33 @@ def ensureparen(t,flag=0,ismul=0,do_decimal=False):
     t=trysimple(t, do_decimal)
     tt=string2ast(t)
     if t[0]=='-':
-        if tt[0] == 'factor': # or tt[0] == 'term' and ismul:
-            # single number doesn't need braces
-            return t
-        else:
-##        print "0: ", t, "->", '(%s)'%t
-            return '(%s)'%t
+        return t if tt[0] == 'factor' else f'({t})'
     if tt[0]=='arith_expr':
 ##        print "1: ", t, "->", '(%s)'%t
-        return '(%s)'%t
+        return f'({t})'
     if flag>0:
-        if tt[0] == 'term':
-            return '(%s)'%t
-        elif tt[0] == 'power':
-            if tt[1] == ['NAME', 'pow']:
-                return t
-            else:
+        if (
+            tt[0] != 'term'
+            and tt[0] == 'power'
+            and tt[1] == ['NAME', 'pow']
+            or tt[0] != 'term'
+            and tt[0] != 'power'
+            and tt[0] == 'xor_expr'
+            and len(tt) <= 3
+        ):
+            return t
+        elif (
+            tt[0] != 'term'
+            and tt[0] == 'power'
+            or tt[0] != 'term'
+            and tt[0] == 'xor_expr'
+        ):
                 # ** case
-                for x in tt[1:]:
-                    if x[0] == 'arith_expr':
-                        return '(%s)'%t
-        elif tt[0] == 'xor_expr':    # added xor_expr for ^ powers
-            if len(tt)>3:
-                for x in tt[1:]:
-                    if x[0] == 'arith_expr':
-                        return '(%s)'%t
-            else:
-                return t
+            for x in tt[1:]:
+                if x[0] == 'arith_expr':
+                    return f'({t})'
+        elif tt[0] == 'term':
+            return f'({t})'
 ##        if t[0]=='(' and t[-1]==')' and t[1:-1].find('(') < t[1:-1].find(')'):
 ##            # e.g. (1+x) doesn't need another set of braces
 ##            print "2: ", t, "->", t
@@ -639,11 +615,7 @@ def ensurebare(t):
     t=trysimple(t)
     try:
         if t[0]=='(' and t[-1]==')':
-            if t[1:-1].find('(') < t[1:-1].find(')'):
-                return t[1:-1]
-            else:
-                # false positive, e.g. (1+x)-(3-y)
-                return t
+            return t[1:-1] if t[1:-1].find('(') < t[1:-1].find(')') else t
         else:
             return t
     except IndexError:
@@ -900,18 +872,13 @@ class symbolMapClass(object):
         if isinstance(arg, str):
             if arg in self.lookupDict:
                 return self.lookupDict[arg]
+            try:
+                po = parserObject(arg, False, ignoreQuotes=False)
+            except:
+                # cannot do anything to it!
+                return arg
             else:
-                try:
-                    po = parserObject(arg, False, ignoreQuotes=False)
-                except:
-                    # cannot do anything to it!
-                    return arg
-                else:
-                    if len(po.tokenized) <= 1:
-                        # don't recurse, we have a single token or whitespace/CR/LF
-                        return arg
-                    else:
-                        return "".join(mapNames(self,po.tokenized))
+                return arg if len(po.tokenized) <= 1 else "".join(mapNames(self,po.tokenized))
         elif hasattr(arg, 'mapNames'):
             # Quantity or QuantSpec
             res = copy(arg)
@@ -945,7 +912,7 @@ class symbolMapClass(object):
             except TypeError:
                 # probably not a mutable type - we know what to do with a tuple
                 if isinstance(arg, tuple):
-                    return tuple([self.__getitem__(v) for v in arg])
+                    return tuple(self.__getitem__(v) for v in arg)
                 else:
                     return arg
             except:
@@ -965,15 +932,14 @@ class symbolMapClass(object):
                     # overwrite unprocessed entry in res, from copy of arg
                     res[i] = self(v)
             except TypeError:
-                # probably not a mutable type - we know what to do with a tuple
                 if isinstance(arg, tuple):
-                    return tuple([self(v) for v in arg])
-                else:
-                    try:
-                        return self.__getitem__(res)
-                    except:
-                        raise TypeError("symbolMapClass does not know how to "
-                         "process this type of argument (%s)"%str(type(arg)))
+                    return tuple(self(v) for v in arg)
+                try:
+                    return self.__getitem__(res)
+                except:
+                    raise TypeError(
+                        f"symbolMapClass does not know how to process this type of argument ({str(type(arg))})"
+                    )
             except:
                 try:
                     return self.__getitem__(res)
@@ -1076,8 +1042,12 @@ class auxfnDBclass(object):
         if parserObj not in self.auxnames:
             self.auxnames[parserObj] = auxfnName
         else:
-            raise ValueError("Parser object " + parserObj.name + " already "
-                             "exists in auxiliary function database")
+            raise ValueError(
+                (
+                    f"Parser object {parserObj.name}" + " already "
+                    "exists in auxiliary function database"
+                )
+            )
 
     def __repr__(self):
         return "ModelSpec internal helper class: auxfnDBclass object"
@@ -1088,11 +1058,10 @@ class auxfnDBclass(object):
         if parserObj is None:
             # return all auxiliary functions known
             return list(self.auxnames.values())
-        else:
-            try:
-                return [self.auxnames[parserObj]]
-            except KeyError:
-                return []
+        try:
+            return [self.auxnames[parserObj]]
+        except KeyError:
+            return []
 
     def removeAuxFn(self, auxfnName):
         flagdelete = None
@@ -1197,17 +1166,13 @@ class parserObject(object):
 
     def __call__(self, specialtoks=None, symbolMap=None, includeProtected=True):
         if specialtoks is None:
-            if self.ignoreTokens is not None:
-                specialtoks = self.ignoreTokens
-            else:
-                specialtoks = []
+            specialtoks = self.ignoreTokens if self.ignoreTokens is not None else []
         if self.tokenized == []:
             return self.parse(specialtoks, symbolMap, includeProtected)
+        if symbolMap is None:
+            return "".join(self.tokenized)
         else:
-            if symbolMap is None:
-                return "".join(self.tokenized)
-            else:
-                return "".join(symbolMap(self.tokenized))
+            return "".join(symbolMap(self.tokenized))
 
     def find(self, token):
         """Find all occurrences of the given token in the expression, returning a list

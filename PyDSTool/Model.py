@@ -126,52 +126,45 @@ class boundary_containment_by_event(boundary_containment):
         try:
             evpt = evpts[self.pars.coordname]
         except KeyError:
-            raise ValueError("No such coordinate %s in the defined event"%self.pars.coordname)
+            raise ValueError(
+                f"No such coordinate {self.pars.coordname} in the defined event"
+            )
         except TypeError:
             # no events of this kind were found, so passed feature eval test
             # dereferencing None (unsubscriptable object)
             if self.pars.abseps > 0:
                 # would like to re-evaluate event at its threshold+abseps, but
                 # leave for now
-                print("Warning -- Boundary containment feature %s:"%self.name)
+                print(f"Warning -- Boundary containment feature {self.name}:")
                 print(" Check for uncertain case using events not implemented")
-                self.results.output = None
-                self.results.uncertain = False
-            else:
-                self.results.output = None
-                self.results.uncertain = False
+            self.results.uncertain = False
+            self.results.output = None
             return True
         else:
             # event found
             if self.pars.abseps > 0:
                 # would like to re-evaluate event at its threshold+abseps, but
                 # leave for now
-                print("Warning -- Boundary containment feature %s:"%self.name)
+                print(f"Warning -- Boundary containment feature {self.name}:")
                 print(" Check for uncertain case using events not implemented")
-                self.results.output = evpt[0]  # only use first event (in case not Terminal)
-                self.results.uncertain = False
-            else:
-                self.results.output = evpt[0]  # only use first event (in case not Terminal)
-                self.results.uncertain = False
+            self.results.uncertain = False
+            self.results.output = evpt[0]  # only use first event (in case not Terminal)
             return False
 
     def _find_idx(self):
         """Helper function for finding index in trajectory meshpoints
         at which containment first failed."""
-        if self.results.satisfied:
-            # Trajectory satisfied constraint!
-            return None
-        return len(self.results.output)
+        return None if self.results.satisfied else len(self.results.output)
 
 
 class boundary_containment_by_postproc(boundary_containment):
     def evaluate(self, traj):
         diffs = [p - self.pars.thresh for p in \
-                 traj.sample(coords=self.pars.coordname)]
+                     traj.sample(coords=self.pars.coordname)]
         if self.pars.verbose_level > 1:
-            print("%s diffs in coord %s ="%(self.name,self.pars.coordname) + ", %s" % diffs)
+            print(f"{self.name} diffs in coord {self.pars.coordname} =" + f", {diffs}")
         res_strict = array([sign(d) \
-                     == self.pars.interior_dirn for d in diffs])
+                         == self.pars.interior_dirn for d in diffs])
         satisfied_strict = alltrue(res_strict)
         if self.pars.abseps > 0:
             if self.pars.interior_dirn == 0:
@@ -179,7 +172,7 @@ class boundary_containment_by_postproc(boundary_containment):
                 res_loose = array([abs(d) < self.pars.abseps for d in diffs])
             else:
                 res_loose = array([sign(d + self.pars.interior_dirn*self.pars.abseps) \
-                                   == self.pars.interior_dirn for d in diffs])
+                                       == self.pars.interior_dirn for d in diffs])
             satisfied_loose = alltrue(res_loose)
             self.results.output = res_loose
             # if p values are *outside* thresh by up to abseps amount
@@ -200,9 +193,9 @@ class boundary_containment_by_postproc(boundary_containment):
             return None
         res = self.results.output
         if res[0] == -1:
-            adjusted_res = list((res + 1) != 0)
+            adjusted_res = list(res != -1)
         elif res[0] == 1:
-            adjusted_res = list((res - 1) != 0)
+            adjusted_res = list(res != 1)
         else:
             # starts with 0 already
             adjusted_res = list(res != 0)
@@ -291,23 +284,13 @@ class domain_test(ModelContext.qt_feature_node):
         if xlo_bc.results.uncertain:
             if self.pars.verbose_level > 0:
                 print("Lo bd uncertain")
-            if self.isdiscrete:
-                # accept uncertain case for discrete domain
-                xlo_test = True
-            else:
-                # check transversality at critical (boundary) value of domain
-                xlo_test = self.subfeatures['dx_test_lo'](traj)
+            xlo_test = True if self.isdiscrete else self.subfeatures['dx_test_lo'](traj)
         xhi_bc = self.subfeatures['x_test_hi']
         xhi_test = xhi_bc(traj)
         if xhi_bc.results.uncertain:
             if self.pars.verbose_level > 0:
                 print("Hi bd uncertain")
-            if self.isdiscrete:
-                # accept uncertain case for discrete domain
-                xhi_test = True
-            else:
-                # check transversality at critical (boundary) value of domain
-                xhi_test = self.subfeatures['dx_test_hi'](traj)
+            xhi_test = True if self.isdiscrete else self.subfeatures['dx_test_hi'](traj)
         for sf in self.subfeatures.values():
             self.results[sf.name] = sf.results
         return xlo_test and xhi_test
@@ -364,19 +347,18 @@ class Model(object):
     def __init__(self, legit, *a, **kw):
         # legit is a way to ensure that instances of this abstract class
         # are not created directly
-        if not legit==True:
+        if legit != True:
             # use explicit comparison to True otherwise kw argument will
             # eval to True, which is not what we want
             raise RuntimeError("Only use HybridModel or NonHybridModel classes")
-        if len(a) > 0:
-            if len(a) == 1 and isinstance(a[0], dict):
-                if intersect(a[0].keys(),kw.keys()) != []:
-                    raise ValueError("Cannot have initialization keys "
-                        "common to both dictionary and keyword arguments")
-                kw.update(a[0])
-            else:
+        if a:
+            if len(a) != 1 or not isinstance(a[0], dict):
                 raise ValueError("Non-keyword arguments must be a single "
                                    "dictionary")
+            if intersect(a[0].keys(),kw.keys()) != []:
+                raise ValueError("Cannot have initialization keys "
+                    "common to both dictionary and keyword arguments")
+            kw |= a[0]
         try:
             self.name = kw['name']
             # modelInfo is a dict mapping model names --> a dict of:
@@ -411,7 +393,7 @@ class Model(object):
             try:
                 infodict['dsi']._supermodel = self.name
             except KeyError:
-                raise TypeError("Invalid modelInfo entry found with name %s"%name)
+                raise TypeError(f"Invalid modelInfo entry found with name {name}")
             self.registry[name] = infodict['dsi'].model
 
         self.diagnostics = Diagnostics()
@@ -495,11 +477,7 @@ class Model(object):
                 auxvars.extend(auxvarnames)
             else:
                 auxvars = intersect(auxvars, auxvarnames)
-            if obsvars == []:
-                # first ds, so add them all
-                obsvars = varnames
-            else:
-                obsvars = intersect(obsvars, varnames)
+            obsvars = varnames if obsvars == [] else intersect(obsvars, varnames)
         intvars = remain(all_known_varnames, obsvars)
         return (obsvars, intvars, auxvars)
 
@@ -544,9 +522,9 @@ class Model(object):
                         raise PyDSTool_ExistError("Cannot use this function "
                             "for models not defined through ModelSpec")
                     info(self._mspecdict[target]['modelspec'].flattenSpec(\
-                                [self.modelInfo[target]['dsi'].get('indepvariable').name]))
+                                    [self.modelInfo[target]['dsi'].get('indepvariable').name]))
             except KeyError:
-                raise ValueError("Model named %s is not known"%target)
+                raise ValueError(f"Model named {target} is not known")
 
     def showSpec(self):
         for ds in self.registry.values():
@@ -609,8 +587,9 @@ class Model(object):
         if tdata is None:
             raise ValueError("tdata must be specified")
         if len(tdata) == 1:
-            assert isinstance(tdata, float) or isinstance(tdata, int), \
-                   'tdata must be either a single number or a pair'
+            assert isinstance(
+                tdata, (float, int)
+            ), 'tdata must be either a single number or a pair'
             t0_global = tdata[0]
             t1_global = Inf
         elif len(tdata) == 2:
@@ -621,9 +600,9 @@ class Model(object):
                                'float or a pair of floats')
         if not force_overwrite:
             assert trajname not in self.trajectories, \
-                                   'Trajectory name already exists'
+                                       'Trajectory name already exists'
         assert self.modelInfo != {}, \
-               'No Generator or Model objects defined for this model'
+                   'No Generator or Model objects defined for this model'
         return tdata, t0_global, t1_global, force_overwrite
 
     def query(self, querykey=''):
@@ -633,13 +612,13 @@ class Model(object):
          'auxvars', 'auxvariables', 'vardomains', 'pardomains', 'abseps'
          """
         assert isinstance(querykey, str), \
-                       ("Query argument must be a single string")
+                           ("Query argument must be a single string")
         if querykey not in self._querykeys:
             print('Valid query keys are: %r' % self._querykeys)
             print("('events' key only queries model-level events, not those")
             print(" inside sub-models)")
             if querykey != '':
-                raise TypeError('Query key '+querykey+' is not valid')
+                raise TypeError(f'Query key {querykey} is not valid')
         if querykey in ['pars', 'parameters']:
             result = copy.copy(self.pars)
         elif querykey in ['ics', 'initialconditions']:
@@ -648,7 +627,7 @@ class Model(object):
             result = {}
             for dsName, model in self.registry.items():
                 try:
-                    result.update(model.eventstruct.events)
+                    result |= model.eventstruct.events
                 except AttributeError:
                     # ds is a ModelInterface, not a Generator
                     result.update(model.query('events'))
@@ -661,8 +640,8 @@ class Model(object):
             # accumulate domains from each sub-model for regular variables
             for model in self.registry.values():
                 vardoms = model.query('vardomains')
-                if len(result)==0:
-                    result.update(vardoms)
+                if not result:
+                    result |= vardoms
                 else:
                     for vname, vdom in result.items():
                         if vdom.issingleton:
@@ -690,8 +669,8 @@ class Model(object):
             # accumulate domains from each sub-model for regular variables
             for model in self.registry.values():
                 pardoms = model.query('pardomains')
-                if len(result)==0:
-                    result.update(pardoms)
+                if not result:
+                    result |= pardoms
                 else:
                     for pname, pdom in result.items():
                         if pdom.issingleton:
@@ -714,14 +693,14 @@ class Model(object):
         elif querykey in ['auxvars', 'auxvariables']:
             result = copy.copy(self.auxvars)
         elif querykey == 'abseps':
-            result = min([ds.query('abseps') for ds in self.registry.values()])
+            result = min(ds.query('abseps') for ds in self.registry.values())
         return result
 
     def getEventMappings(self, dsName):
         try:
             return self.modelInfo[dsName]['swRules']
         except KeyError:
-            raise NameError("Sub-model %s not found in model"%dsName)
+            raise NameError(f"Sub-model {dsName} not found in model")
 
     def setPars(self, p, val):
         # process multirefs first, then hierarchical names
@@ -767,7 +746,7 @@ class Model(object):
             # a specific reference, or the type matching is invalid.
             # either way, we can just call set(p) and let that resolve the issue
             # (note that all multi-refs will have been dealt with by this point)
-            if allFoundNames == []:
+            if not allFoundNames:
                 self.set(pars={p: val})
             else:
                 self.set(pars={}.fromkeys(allFoundNames, val))
@@ -819,7 +798,7 @@ class Model(object):
             # a specific reference, or the type matching is invalid.
             # either way, we can just call set(p) and let that resolve the issue
             # (note that all multi-refs will have been dealt with by this point)
-            if allFoundNames == []:
+            if not allFoundNames:
                 self.set(ics={p: val})
             else:
                 self.set(ics={}.fromkeys(allFoundNames, val))
@@ -839,12 +818,10 @@ class Model(object):
         """
         for key in kw:
             if key not in self._setkeys:
-                raise KeyError("Not a permitted parameter argument: %s"%key + \
-                                    ". Allowed keys: "+str(self._setkeys))
-        if 'restrictDSlist' in kw:
-            restrictDSlist = kw['restrictDSlist']
-        else:
-            restrictDSlist = []
+                raise KeyError(
+                    f"Not a permitted parameter argument: {key}. Allowed keys: {str(self._setkeys)}"
+                )
+        restrictDSlist = kw.get('restrictDSlist', [])
         # Handle initial conditions here, because compute will pass
         # the values on to the appropriate sub-models when they are called.
         if 'ics' in kw:
@@ -927,7 +904,7 @@ class Model(object):
                     options = ds._setkeys
                 if key in options:
                     if key in ['algparams', 'checklevel', 'abseps'] and \
-                        ds.name not in restrictDSlist:
+                            ds.name not in restrictDSlist:
                             # only apply these keys to the restricted list
                             continue
                     if isinstance(value, dict):
@@ -957,21 +934,18 @@ class Model(object):
                 for entrykey, entryval in value.items():
                     if entry_err_attr[entrykey] == numDSs:
                         raise PyDSTool_AttributeError('Parameter does not' +\
-                              ' exist in any sub-model: %s = %f'%(entrykey,
+                                  ' exist in any sub-model: %s = %f'%(entrykey,
                                                                   entryval))
                     if entry_err_val[entrykey] == numDSs:
                         raise PyDSTool_ValueError('Parameter value error in' +\
-                              ' every sub-model: %s = %f'%(entrykey, entryval))
-                    else:
-                        # can't think of other ways for this error to crop up
-                        pass
+                                  ' every sub-model: %s = %f'%(entrykey, entryval))
             else:
                 if entry_err_attr == numDSs:
-                    raise PyDSTool_AttributeError('Parameter does not exist' +\
-                             ' in any sub-model: %s'%key)
+                    raise PyDSTool_AttributeError(
+                        f'Parameter does not exist in any sub-model: {key}'
+                    )
                 if entry_err_val == numDSs:
-                    raise PyDSTool_ValueError('Parameter value error in' +\
-                              ' every sub-model: %s'%key)
+                    raise PyDSTool_ValueError(f'Parameter value error in every sub-model: {key}')
             del(entry_err_attr)
             del(entry_err_val)
         self._generateParamInfo()
@@ -1017,7 +991,7 @@ class Model(object):
         try:
             traj = self.trajectories[trajname]
         except KeyError:
-            raise ValueError("trajectory '"+trajname+"' unknown")
+            raise ValueError(f"trajectory '{trajname}' unknown")
         else:
             return traj(t, coords=coords, asGlobalTime=asGlobalTime,
                         asmap=asmap)
@@ -1064,8 +1038,7 @@ class Model(object):
         if end not in [0,1]:
             raise ValueError("end must be 0, 1")
         endtraj = self.trajectories[trajname].trajSeq[-end]
-        tend = endtraj.indepdomain[end]
-        return tend
+        return endtraj.indepdomain[end]
 
     def _validateVarNames(self, names):
         """Check types and uniqueness of variable names."""
@@ -1085,7 +1058,7 @@ class Model(object):
         if len(r) > 0:
             # then there are names given that are not known as
             # obs, int, or aux
-            raise ValueError("Unknown variable names: "+str(r))
+            raise ValueError(f"Unknown variable names: {str(r)}")
         for v in remain(varnames, self.obsvars):
             # only include names that are not already observables
             self.obsvars.append(v)
@@ -1107,7 +1080,7 @@ class Model(object):
         if len(r) > 0:
             # then there are names given that are not known as
             # obs, int, or aux
-            raise ValueError("Unknown variable names: "+str(r))
+            raise ValueError(f"Unknown variable names: {str(r)}")
         for v in remain(varnames, self.intvars):
             # only include names that are not already internals
             self.intvars.append(v)
@@ -1165,14 +1138,14 @@ class Model(object):
         try:
             traj = self.trajectories[trajname]
         except KeyError:
-            raise ValueError('No such trajectory name %s'%trajname)
+            raise ValueError(f'No such trajectory name {trajname}')
         if trajname != newname:
             if newname not in self.trajectories or force:
                 self.trajectories[newname] = traj
                 del self.trajectories[trajname]
                 traj.name = newname
             else:
-                raise ValueError("Name %s already exists"%newname)
+                raise ValueError(f"Name {newname} already exists")
 
     def getTrajModelName(self, trajname, t=None):
         """Return the named trajectory's associated sub-model(s) used
@@ -1180,18 +1153,18 @@ class Model(object):
         try:
             modelNames = self.trajectories[trajname].modelNames
         except KeyError:
-            raise ValueError('No such trajectory name %s'%trajname)
+            raise ValueError(f'No such trajectory name {trajname}')
         if t is None:
             # return list of Generators for associated hybrid trajectory
             return modelNames
-        else:
-            parts = self.getTrajTimePartitions(trajname)
-            pix = 0
-            for pinterval in parts:
-                if pinterval.contains(t) is not notcontained:
-                    return modelNames[pix]
-                else:
-                    pix += 1
+        parts = self.getTrajTimePartitions(trajname)
+        pix = 0
+        for pinterval in parts:
+            if pinterval.contains(t) is notcontained:
+                pix += 1
+
+            else:
+                return modelNames[pix]
 
     def getTrajEventTimes(self, trajname, events=None):
         """Return the named trajectory's Generator-flagged event times.
@@ -1253,23 +1226,22 @@ class Model(object):
         idx -- (optional) index into value if algorithmic parameter val is a
           list of values.
         """
-        if target in self.registry.keys():
-            algpars = self.registry[target].get('algparams')
-            if par in algpars.keys():
-                if isinstance(algpars[par], list):
-                    if idx is not None:
-                        if isinstance(idx, list):
-                            val = [algpars[par][x] for x in idx]
-                        else:
-                            val = algpars[par][idx]
-                    else:
-                        val = algpars[par]
-                else:
-                    val = algpars[par]
-            else:
-                val = None
-        else:
+        if target not in self.registry.keys():
             raise ValueError("Target sub-model name not found")
+        algpars = self.registry[target].get('algparams')
+        if par in algpars.keys():
+            if (
+                isinstance(algpars[par], list)
+                and idx is not None
+                and isinstance(idx, list)
+            ):
+                val = [algpars[par][x] for x in idx]
+            elif isinstance(algpars[par], list) and idx is not None:
+                val = algpars[par][idx]
+            else:
+                val = algpars[par]
+        else:
+            val = None
         return val
 
     def setDSAlgPars(self, target, par, val):
@@ -1287,10 +1259,7 @@ class Model(object):
           ARE APPROPRIATE TO PARAMETERS!!!
         """
 
-        if isinstance(target, list):
-            subModelList = target
-        else:
-            subModelList = [target]
+        subModelList = target if isinstance(target, list) else [target]
         for dsName in subModelList:
             algpars = self.registry[dsName].get('algparams')
             if par in algpars.keys():
@@ -1298,22 +1267,18 @@ class Model(object):
                 # appropriate length, otherwise warn and skip
                 if isinstance(algpars[par], list):
                     if isinstance(val, list):
-                        if len(algpars[par]) != len(val):
-                            print("Warning: par %s list len (%d) in generator %s doesn't match val list len (%d). Skipping."%(par, len(algpars[par]) + "%s, %d" % (dsName, len(val))))
-                            continue
-                        else:
+                        if len(algpars[par]) == len(val):
                             algpars[par] = val
+                        else:
+                            print("Warning: par %s list len (%d) in generator %s doesn't match val list len (%d). Skipping."%(par, len(algpars[par]) + "%s, %d" % (dsName, len(val))))
                     else:
                         # Set every member of the list to that value
                         for x in range(len(algpars[par])):
                             algpars[par][x] = val
+                elif isinstance(val, list):
+                    print("Warning: par %s type (%s) in generator %s doesn't match val type (%s). Skipping."%(par, type(algpars[par]) + "%s %d" % (dsName, type(val))))
                 else:
-                    if isinstance(val, list):
-                        print("Warning: par %s type (%s) in generator %s doesn't match val type (%s). Skipping."%(par, type(algpars[par]) + "%s %d" % (dsName, type(val))))
-                    else:
-                        algpars[par] = val
-            else:
-                pass
+                    algpars[par] = val
 
 
     def sample(self, trajname, coords=None, dt=None,
@@ -1348,18 +1313,19 @@ class Model(object):
         at given verbosity level (default 0)"""
         pp = pprint.PrettyPrinter(indent=3)
         if dsName is None:
-            result = {}
             res_str = "Sub-models defined in model %s:\n" % self.name
-            for name, infodict in self.modelInfo.items():
-                result[name] = infodict['dsi'].model._infostr(verbosity)
+            result = {
+                name: infodict['dsi'].model._infostr(verbosity)
+                for name, infodict in self.modelInfo.items()
+            }
             return res_str + pp.pprint(result)
         else:
             # return more information for a single sub-model
             try:
                 result = {dsName: self.modelInfo[dsName]['dsi'].model._infostr(verbosity)+"\n"+\
-                      "Event mapping info:\n" + str(self.modelInfo[dsName]['swRules'])}
+                          "Event mapping info:\n" + str(self.modelInfo[dsName]['swRules'])}
             except KeyError:
-                raise NameError("Sub-model %s not found in model"%dsName)
+                raise NameError(f"Sub-model {dsName} not found in model")
             return "Sub-model %s:\n" % (dsName) + pp.pprint(result)
 
     def showDSEventInfo(self, target, verbosity=1, ics=None, t=0):

@@ -72,5 +72,5 @@ else:
         These are platform-dependent and are specific to matplotlib's support.
         """
         for f in formats:
-            plt.figure(fignum).savefig(fname+'.'+f)
+            plt.figure(fignum).savefig(f'{fname}.{f}')
 

@@ -65,7 +65,7 @@ def _cvt_type(t):
     try:
         return _num_equivtype[t]
     except KeyError:
-        raise TypeError('Coordinate type %s not valid for Point' % str(t))
+        raise TypeError(f'Coordinate type {str(t)} not valid for Point')
 
 
 def _check_type(value, ctype):
@@ -98,8 +98,7 @@ class Point(object):
         self._parameterized = False
         self.labels = {}
         if intersect(kw.keys(), point_keys) == []:
-            temp_kw = {}
-            temp_kw['coorddict'] = copy(kw)
+            temp_kw = {'coorddict': copy(kw)}
             kw = copy(temp_kw)
 
         # Setting Point type
@@ -122,7 +121,7 @@ class Point(object):
             for n, v in kw['coorddict'].items():
                 # Add coord name with type checking
                 coordnames.append(n if isinstance(n, str) \
-                                  else repr(n))
+                                      else repr(n))
 
                 # Add coord value with type checking
                 ## Extract value from sequence if needed
@@ -131,9 +130,9 @@ class Point(object):
                         raise ValueError('Values sequence must be nonempty')
                     if len(v) > 1:
                         warnings.warn(
-                            'Sequence value %s truncated to first element' % v,
+                            f'Sequence value {v} truncated to first element',
                             UserWarning,
-                            stacklevel=2
+                            stacklevel=2,
                         )
                     val = v[0]
                 else:
@@ -157,7 +156,7 @@ class Point(object):
                     _check_type(v, ctype)
                 coordvalues = array(vals, ctype)
             else:
-                raise TypeError('Coordinate type %s not valid for Point' % str(type(vals)))
+                raise TypeError(f'Coordinate type {str(type(vals))} not valid for Point')
 
             if 'coordnames' in kw:
                 if isinstance(kw['coordnames'], str):
@@ -172,11 +171,7 @@ class Point(object):
         # Sanity checks for prepared data
         assert isUniqueSeq(coordnames), 'Coordinate names must be unique'
         if len(coordnames) != coordvalues.shape[0]:
-            msg = "Point initialization error:\n" \
-                  "Found coord names: {} (dimension = {}) " \
-                  "vs. data dimension = {}".format(
-                      coordnames, len(coordnames), coordvalues.shape[0]
-                  )
+            msg = f"Point initialization error:\nFound coord names: {coordnames} (dimension = {len(coordnames)}) vs. data dimension = {coordvalues.shape[0]}"
             print(msg)
             raise ValueError("Mismatch between number of coordnames and "
                              "dimension of data")
@@ -258,10 +253,7 @@ class Point(object):
         raise NotImplementedError
 
     def get(self, coord, d=None):
-        if coord in self.coordnames:
-            return self.__call__(coord)
-        else:
-            return d
+        return self.__call__(coord) if coord in self.coordnames else d
 
     def update(self, d):
         for k, v in d.items():
@@ -298,7 +290,7 @@ class Point(object):
                 # list of strings
                 return [self._name_ix_map[n] for n in namelist]
         except KeyError as e:
-            raise PyDSTool_KeyError("Name not found: "+str(e))
+            raise PyDSTool_KeyError(f"Name not found: {str(e)}")
 
 
     def __len__(self):
@@ -326,8 +318,12 @@ class Point(object):
                 raise ValueError("Slice index out of range")
             return list(range(s1, s2, s3))
         else:
-            raise ValueError("Invalid coordinate / index: %s"%str(x) + \
-                             " -- coord names are: %s"%str(self.coordnames))
+            raise ValueError(
+                (
+                    f"Invalid coordinate / index: {str(x)}"
+                    + f" -- coord names are: {str(self.coordnames)}"
+                )
+            )
 
 
     def __call__(self, coords):
@@ -369,10 +365,7 @@ class Point(object):
 
 
     def toarray(self):
-        if self.dimension == 1:
-            return self.coordarray[0]
-        else:
-            return self.coordarray
+        return self.coordarray[0] if self.dimension == 1 else self.coordarray
 
 
     def __add__(self, other):
@@ -447,11 +440,13 @@ class Point(object):
     def __lt__(self, other):
         try:
             assert shape(self) == shape(other)
-            if hasattr(other, 'coordnames'):
-                if self.coordnames != other.coordnames:
-                    raise ValueError("Coordinate mismatch")
+            if (
+                hasattr(other, 'coordnames')
+                and self.coordnames != other.coordnames
+            ):
+                raise ValueError("Coordinate mismatch")
             return linalg.norm(self.coordarray, self._normord) < \
-                   linalg.norm(other.coordarray, self._normord)
+                       linalg.norm(other.coordarray, self._normord)
         except (AttributeError, TypeError, AssertionError):
             return self.coordarray < other
         except ZeroDivisionError:
@@ -460,11 +455,13 @@ class Point(object):
     def __gt__(self, other):
         try:
             assert shape(self) == shape(other)
-            if hasattr(other, 'coordnames'):
-                if self.coordnames != other.coordnames:
-                    raise ValueError("Coordinate mismatch")
+            if (
+                hasattr(other, 'coordnames')
+                and self.coordnames != other.coordnames
+            ):
+                raise ValueError("Coordinate mismatch")
             return linalg.norm(self.coordarray, self._normord) > \
-                   linalg.norm(other.coordarray, self._normord)
+                       linalg.norm(other.coordarray, self._normord)
         except (AttributeError, TypeError, AssertionError):
             return self.coordarray > other
         except ZeroDivisionError:
@@ -473,11 +470,13 @@ class Point(object):
     def __le__(self, other):
         try:
             assert shape(self) == shape(other)
-            if hasattr(other, 'coordnames'):
-                if self.coordnames != other.coordnames:
-                    raise ValueError("Coordinate mismatch")
+            if (
+                hasattr(other, 'coordnames')
+                and self.coordnames != other.coordnames
+            ):
+                raise ValueError("Coordinate mismatch")
             return linalg.norm(self.coordarray, self._normord) <= \
-                   linalg.norm(other.coordarray, self._normord)
+                       linalg.norm(other.coordarray, self._normord)
         except (AttributeError, TypeError, AssertionError):
             return self.coordarray <= other
         except ZeroDivisionError:
@@ -486,11 +485,13 @@ class Point(object):
     def __ge__(self, other):
         try:
             assert shape(self) == shape(other)
-            if hasattr(other, 'coordnames'):
-                if self.coordnames != other.coordnames:
-                    raise ValueError("Coordinate mismatch")
+            if (
+                hasattr(other, 'coordnames')
+                and self.coordnames != other.coordnames
+            ):
+                raise ValueError("Coordinate mismatch")
             return linalg.norm(self.coordarray, self._normord) >= \
-                   linalg.norm(other.coordarray, self._normord)
+                       linalg.norm(other.coordarray, self._normord)
         except (AttributeError, TypeError, AssertionError):
             return self.coordarray >= other
         except ZeroDivisionError:
@@ -499,11 +500,13 @@ class Point(object):
     def __eq__(self, other):
         try:
             assert shape(self) == shape(other)
-            if hasattr(other, 'coordnames'):
-                if self.coordnames != other.coordnames:
-                    raise ValueError("Coordinate mismatch")
+            if (
+                hasattr(other, 'coordnames')
+                and self.coordnames != other.coordnames
+            ):
+                raise ValueError("Coordinate mismatch")
             return linalg.norm(self.coordarray, self._normord) == \
-                   linalg.norm(other.coordarray, self._normord)
+                       linalg.norm(other.coordarray, self._normord)
         except (AttributeError, TypeError, AssertionError):
             return self.coordarray == other
         except ZeroDivisionError:
@@ -512,11 +515,13 @@ class Point(object):
     def __ne__(self, other):
         try:
             assert shape(self) == shape(other)
-            if hasattr(other, 'coordnames'):
-                if self.coordnames != other.coordnames:
-                    raise ValueError("Coordinate mismatch")
+            if (
+                hasattr(other, 'coordnames')
+                and self.coordnames != other.coordnames
+            ):
+                raise ValueError("Coordinate mismatch")
             return linalg.norm(self.coordarray, self._normord) != \
-                   linalg.norm(other.coordarray, self._normord)
+                       linalg.norm(other.coordarray, self._normord)
         except (AttributeError, TypeError, AssertionError):
             return self.coordarray != other
         except ZeroDivisionError:
@@ -538,12 +543,8 @@ class Point(object):
             outputStr = ''
             for c in self.coordnames:
                 v = self.coordarray[self._map_names_to_ixs(c)]
-                if isinstance(v, ndarray):
-                    dvstr = str(v[0])
-                else:
-                    # only alternative is a singleton numeric value (not list)
-                    dvstr = str(v)
-                outputStr += c+':  '+dvstr
+                dvstr = str(v[0]) if isinstance(v, ndarray) else str(v)
+                outputStr += f'{c}:  {dvstr}'
                 if c != self.coordnames[-1]:
                     outputStr += "\n"
             for label, infodict in self.labels.items():

@@ -110,7 +110,7 @@ class integrator:
             verify_nonneg('nExtInputs', nExtInputs, _all_int)
             verify_nonneg('extraSpace', extraSpace, _all_int)
         except:
-            print("%s %s" % (sys.exc_info()[0], sys.exc_info()[1]))
+            print(f"{sys.exc_info()[0]} {sys.exc_info()[1]}")
             raise InitError('Integrator initialization failed!')
 
 
@@ -248,16 +248,8 @@ class integrator:
         self.checkInteg(maxpts, rtol, atol)
         self.maxpts = maxpts
 
-        if isinstance(rtol, list):
-            self.rtol = rtol
-        else:
-            self.rtol = [rtol]*self.phaseDim
-
-        if isinstance(atol, list):
-            self.atol = atol
-        else:
-            self.atol = [atol]*self.phaseDim
-
+        self.rtol = rtol if isinstance(rtol, list) else [rtol]*self.phaseDim
+        self.atol = atol if isinstance(atol, list) else [atol]*self.phaseDim
         if self._integMod.InitInteg(self.maxpts, self.atol, self.rtol)[0] != 1:
             raise InitError('InitInteg call failed!')
 
@@ -299,9 +291,7 @@ class integrator:
             if doCheck:
                 self.checkExtInputs(extInputVals, extInputTimes)
             self.extInputLens = []
-            for x in range(self.nExtInputs):
-                self.extInputLens.append(len(extInputTimes[x]))
-
+            self.extInputLens.extend(len(extInputTimes[x]) for x in range(self.nExtInputs))
             IVals = extInputVals[0]
             ITimes = extInputTimes[0]
             for x in range(self.nExtInputs - 1):
@@ -387,11 +377,7 @@ class integrator:
         self.refine = int(refine)
         self.specTimes = list(specTimes)
 
-        if self.t0 < self.tend:
-            self.direction = 1
-        else:
-            self.direction = -1
-
+        self.direction = 1 if self.t0 < self.tend else -1
         # Set bounds
         if bounds != []:
             self.upperBounds = bounds[1]
@@ -408,9 +394,9 @@ class integrator:
                     self.lowerBounds[i] = -abs(float(self.defaultBound))
         else:
             self.upperBounds = [abs(float(self.defaultBound))] * \
-                (self.phaseDim + self.paramDim)
+                    (self.phaseDim + self.paramDim)
             self.lowerBounds = [-abs(float(self.defaultBound))] * \
-                (self.phaseDim + self.paramDim)
+                    (self.phaseDim + self.paramDim)
 
         retval = self._integMod.SetRunParameters(self.ic, self.params,
                              self.gt0, self.t0, self.tend, self.refine,
@@ -465,24 +451,19 @@ class integrator:
             raise TypeError("tend must be real valued")
         if t0 == tend:
             raise ValueError("t0 must differ from tend")
-        if t0 < tend:
-            direction = 1
-        else:
-            direction = -1
-
+        direction = 1 if t0 < tend else -1
         try:
             specTimes = list(specTimes)
         except:
             raise TypeError("specTimes must be a sequence type")
-        if len(specTimes) > 0:
+        if specTimes:
             if not isinstance(specTimes[0], _real_types):
                 raise TypeError("specTimes entries must be real valued")
             if direction == 1:
                 if specTimes[0] < t0 or specTimes[0] > tend:
                     raise ValueError("specTimes entries must be within [%.8f,%.8f]"%(t0,tend))
-            else:
-                if specTimes[0] > t0 or specTimes[0] < tend:
-                    raise ValueError("specTimes entries must be within [%.8f,%.8f]"%(tend,t0))
+            elif specTimes[0] > t0 or specTimes[0] < tend:
+                raise ValueError("specTimes entries must be within [%.8f,%.8f]"%(tend,t0))
 
         if len(specTimes) > 1:
             for x in range(len(specTimes)-1):
@@ -518,12 +499,10 @@ class integrator:
 
     def setContParams(self, tend, params, calcSpecTimes, verbose,
                       extInputChanged, extInputVals, extInputTimes, bounds):
-        if self.direction > 0:
-            if tend < self.tend:
-                raise ValueError("new tend must be > old tend")
-        if self.direction < 0:
-            if tend > self.tend:
-                raise ValueError("new tend must be < old tend")
+        if self.direction > 0 and tend < self.tend:
+            raise ValueError("new tend must be > old tend")
+        if self.direction < 0 and tend > self.tend:
+            raise ValueError("new tend must be < old tend")
 
         if not isinstance(params, list):
             raise TypeError("params must be list")

@@ -230,6 +230,7 @@ class ModelSpec(object):
                 # not necessary for pars and inputs
                 # as they must be explicitly defined
                 outfs['spectypes'][fsname] = c.spec.specType
+
         # ----- end of add_to_fs function -----
         full_mref_names = {}
         if multiDefUnravel:
@@ -248,12 +249,11 @@ class ModelSpec(object):
                     for ix in range(v[1], v[2]+1):
                         FScompatibleNames[k+str(ix)] = ksubs+str(ix)
                         FScompatibleNamesInv[ksubs+str(ix)] = k+str(ix)
-                full_mref_names[ksubs+"["+v[0]+","+str(v[1])+","+str(v[2])+"]"]\
-                               = ksubs
+                full_mref_names[f"{ksubs}[{v[0]},{str(v[1])},{str(v[2])}]"] = ksubs
         for k, v in fs.items():
             if k in quants:
                 for c in v:
-                    if c.name in full_mref_names.keys():
+                    if c.name in full_mref_names:
                         # unravel defs given by pairs p in unravelDict
                         root = full_mref_names[c.name]
                         for p in unravelDict[root]:
@@ -287,41 +287,39 @@ class ModelSpec(object):
         return outfs
 
     def isDefined(self, verbose=False, ignoreInputs=False):
-        defined = True  # initial value
         if len(self.compatibleGens) == 0:
             if verbose:
-                print("'%s' ill defined: empty compatibleGens"%self.name)
+                print(f"'{self.name}' ill defined: empty compatibleGens")
             return False
         if len(self.targetLangs) == 0:
             if verbose:
-                print("'%s' ill defined: empty targetLangs"%self.name)
+                print(f"'{self.name}' ill defined: empty targetLangs")
             return False
         if self.isEmpty():
             if verbose:
-                print("'%s' ill defined: empty contents"%self.name)
+                print(f"'{self.name}' ill defined: empty contents")
             return False
         for v in self.variables.values():
             if not v.isDefined(verbose):
                 if verbose:
-                    print("... in '%s' (type %s)"%(self.name,str(self.__class__)))
+                    print(f"... in '{self.name}' (type {str(self.__class__)})")
                 return False
         for p in self.pars.values():
             if not p.isDefined(verbose):
                 if verbose:
-                    print("... in '%s' (type %s)"%(self.name,str(self.__class__)))
+                    print(f"... in '{self.name}' (type {str(self.__class__)})")
                 return False
         if not ignoreInputs:
             for i in self.inputs.values():
-                if not i.isDefined(verbose):
-                    if verbose:
-                        print("... in '%s' (type %s)"%(self.name,str(self.__class__)))
-                        return False
+                if not i.isDefined(verbose) and verbose:
+                    print(f"... in '{self.name}' (type {str(self.__class__)})")
+                    return False
         for a in self.auxfns.values():
             if not a.isDefined(verbose):
                 if verbose:
-                    print("... in '%s' (type %s)"%(self.name,str(self.__class__)))
+                    print(f"... in '{self.name}' (type {str(self.__class__)})")
                 return False
-        return defined
+        return True
 
 
     def addConnxnTarget(self, targ):
@@ -341,13 +339,13 @@ class ModelSpec(object):
             try:
                 self.connxnTargets.remove(targ)
             except ValueError:
-                raise ValueError("Connection target %s not found"%targ)
+                raise ValueError(f"Connection target {targ} not found")
         elif isinstance(targ, list):
             for t in targ:
                 try:
                     self.connxnTargets.remove(t)
                 except ValueError:
-                    raise ValueError("Connection target %s not found"%t)
+                    raise ValueError(f"Connection target {t} not found")
 
 
     def __contains__(self, obj):
@@ -368,13 +366,17 @@ class ModelSpec(object):
     def __eq__(self, other, diff=False):
         results = []
         try:
-            results.append(type(self) == type(other))
-            results.append(self.name == other.name)
-            results.append(self._registry == other._registry)
+            results.extend(
+                (
+                    type(self) == type(other),
+                    self.name == other.name,
+                    self._registry == other._registry,
+                )
+            )
         except AttributeError as e:
             if diff:
                 print("Type: %s %r" % (className(self), results))
-                print("  " + e)
+                print(f"  {e}")
             return False
         if diff:
             print("Type: %s %r" % (className(self), results))
@@ -395,9 +397,10 @@ class ModelSpec(object):
 
     def validate(self):
         assert isinstance(self.name, str), \
-               "ModelSpec name must be a string"
-        assert len(remain(self.targetLangs, targetLangs)) == 0, \
-               "Invalid target language for '" + self.name + "'"
+                   "ModelSpec name must be a string"
+        assert (
+            len(remain(self.targetLangs, targetLangs)) == 0
+        ), f"Invalid target language for '{self.name}'"
         if hasattr(self, 'components'):
             # leaf nodes do not have this
             for c in self.components.values():
@@ -442,7 +445,7 @@ class ModelSpec(object):
                 # no subcomponent, add to top level
                 self.add(arg)
             else:
-                raise ValueError("Unknown sub-component %s"%tosubcomponent)
+                raise ValueError(f"Unknown sub-component {tosubcomponent}")
         elif isHierarchicalName(arg.name):
             # add the object to the appropriate sub-component
             obj = deepcopy(arg)
@@ -464,9 +467,8 @@ class ModelSpec(object):
                 self.auxfns[objname] = obj
             elif isinstance(obj, ModelSpec):
                 if not issubclass(self.__class__, obj.compatibleContainers):
-                    print("Component " + self.name + ": " + self.__class__.__name__)
-                    print("Invalid sub-component " + objname \
-                          + " (type " + className(obj) + ") to add,")
+                    print(f"Component {self.name}: {self.__class__.__name__}")
+                    print(f"Invalid sub-component {objname} (type {className(obj)}) to add,")
                     print("  with compatible container types:%r" % obj.compatibleContainers)
                     print("Compatible sub-component types: %r" % self._allSubcomponentTypes)
                     raise ValueError("Incompatible sub-component type"

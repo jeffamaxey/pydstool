@@ -103,12 +103,10 @@ class FuncSpec(object):
         else:
             self._defstr = ""
             self._undefstr = ""
-        if 'ignorespecial' in kw:
-            self._ignorespecial = kw['ignorespecial']
-        else:
-            self._ignorespecial = []
-
-        codegen_opts = dict((k, kw.pop(k, '')) for k in ['codeinsert_start', 'codeinsert_end'])
+        self._ignorespecial = kw['ignorespecial'] if 'ignorespecial' in kw else []
+        codegen_opts = {
+            k: kw.pop(k, '') for k in ['codeinsert_start', 'codeinsert_end']
+        }
         self.codegen = CG.getCodeGenerator(self, **codegen_opts)
         # ------------------------------------------
         # reusable terms in function specs
@@ -119,10 +117,7 @@ class FuncSpec(object):
         # time reference, access of regular variables to initial
         # conditions, and user-defined quantities.
         self.auxfns = {}
-        if 'fnspecs' in kw:
-            self._auxfnspecs = deepcopy(kw['fnspecs'])
-        else:
-            self._auxfnspecs = {}
+        self._auxfnspecs = deepcopy(kw['fnspecs']) if 'fnspecs' in kw else {}
         # spec dict of functionality, as a string for each var
         # (in either python or C, or just for python?)
         if '_for_macro_info' in kw:
@@ -131,16 +126,12 @@ class FuncSpec(object):
             self._varsbyforspec = {}
         if 'varspecs' in kw:
             numaux = len(self.auxvars)
-            if '_for_macro_info' in kw:
-                if kw['_for_macro_info'].numfors > 0:
-                    num_varspecs = numaux + len(self.vars) - kw['_for_macro_info'].totforvars + \
+            if '_for_macro_info' in kw and kw['_for_macro_info'].numfors > 0:
+                num_varspecs = numaux + len(self.vars) - kw['_for_macro_info'].totforvars + \
                                    kw['_for_macro_info'].numfors
-                else:
-                    num_varspecs = numaux + len(self.vars)
             else:
                 num_varspecs = numaux + len(self.vars)
-            if len(kw['varspecs']) != len(self._varsbyforspec) and \
-               len(kw['varspecs']) != num_varspecs:
+            if len(kw['varspecs']) not in [len(self._varsbyforspec), num_varspecs]:
                 print("# state variables: %d" % len(self.vars))
                 print("# auxiliary variables: %d" % numaux)
                 print("# of variable specs: %d" % len(kw['varspecs']))
@@ -158,9 +149,6 @@ class FuncSpec(object):
             assert len(kw['spec'])==2, ("'spec' must be a pair:"
                                     " (spec body, spec name)")
             self.spec = deepcopy(kw['spec'])
-            # auxspec not used for explicitly-given specs. it's only for
-            # auto-generated python auxiliary variable specs (as py functions)
-            self.auxspec = {}
             if 'dependencies' in kw:
                 self._dependencies = kw['dependencies']
             else:
@@ -168,7 +156,9 @@ class FuncSpec(object):
                          "explicitly when using 'spec' form of initialization")
         else:
             self.spec = {}
-            self.auxspec = {}
+        # auxspec not used for explicitly-given specs. it's only for
+        # auto-generated python auxiliary variable specs (as py functions)
+        self.auxspec = {}
         self.defined = False  # initial value
         self.validateDef(self.vars, self.pars, self.inputs, self.auxvars, list(self._auxfnspecs.keys()))
         # ... exception if not valid
@@ -181,7 +171,7 @@ class FuncSpec(object):
         self.generateAuxFns()
         if self.spec == {}:
             assert self.varspecs != {}, \
-                   'No functional specification provided!'
+                       'No functional specification provided!'
             self.generateSpec()
             # exception if the following is not successful
             self.validateDependencies(self.dependencies)
@@ -193,8 +183,7 @@ class FuncSpec(object):
 
     def __validate_input(self, kw, valid_keys):
         """Global input dictionary validation"""
-        invalid = set(kw.keys()) - set(valid_keys)
-        if invalid:
+        if invalid := set(kw.keys()) - set(valid_keys):
             raise PyDSTool_KeyError(
                 'Invalid keys %r passed in argument dict' % list(invalid))
 
@@ -248,10 +237,11 @@ class FuncSpec(object):
         if not isinstance(terms, dict):
             raise ValueError('reuseterms must be a dictionary of strings ->'
                                ' replacement strings')
-        self._reuseterms = dict(
-            (t, rt) for t, rt in terms.items()
+        self._reuseterms = {
+            t: rt
+            for t, rt in terms.items()
             if self.__term_valid(t) and self.__repterm_valid(rt)
-        )
+        }
 
     def __term_valid(self, term):
         if isNumericToken(term):
@@ -261,35 +251,35 @@ class FuncSpec(object):
             return False
 
         if term[0] in '+/*':
-            print("Error in term:%s" % term)
+            print(f"Error in term:{term}")
             raise ValueError('terms to be substituted must not begin '
                                 'with arithmetic operators')
         if term[0] == '-':
-            term = '(' + term + ')'
+            term = f'({term})'
         if term[-1] in '+-/*':
-            print("Error in term:%s" % term)
+            print(f"Error in term:{term}")
             raise ValueError('terms to be substituted must not end with '
                                 'arithmetic operators')
         for s in term:
-            if self.targetlang == 'python':
-                if s in r'[]{}~@#$%&\|?^': # <>! now OK, e.g. for "if" statements
-                    print("Error in term:%s" % term)
-                    raise ValueError('terms to be substituted must be '
-                        'alphanumeric or contain arithmetic operators '
-                        '+ - / *')
-            else:
-                if s in r'[]{}~!@#$%&\|?><': # removed ^ from this list
-                    print("Error in term:%s" % term)
-                    raise ValueError('terms to be substituted must be alphanumeric or contain arithmetic operators + - / *')
+            if (
+                self.targetlang == 'python'
+                and s in r'[]{}~@#$%&\|?^'
+                or self.targetlang != 'python'
+                and s in r'[]{}~!@#$%&\|?><'
+            ): # <>! now OK, e.g. for "if" statements
+                print(f"Error in term:{term}")
+                raise ValueError('terms to be substituted must be '
+                    'alphanumeric or contain arithmetic operators '
+                    '+ - / *')
         return True
 
     def __repterm_valid(self, repterm):
         if repterm[0] in num_chars:
-            print("Error in replacement term:%s" % repterm)
+            print(f"Error in replacement term:{repterm}")
             raise ValueError('replacement terms must not begin with numbers')
         for s in repterm:
             if s in r'+-/*.()[]{}~!@#$%^&\|?><,':
-                print("Error in replacement term:%s" % repterm)
+                print(f"Error in replacement term:{repterm}")
                 raise ValueError('replacement terms must be alphanumeric')
 
         return True
@@ -298,12 +288,22 @@ class FuncSpec(object):
         """Unique identifier for this specification."""
         deflist = [self.name, self.targetlang]
         # lists
-        for l in [self.pars, self.vars, self.auxvars, self.inputs,
-                  self.spec, self.auxspec]:
-            deflist.append(tuple(l))
+        deflist.extend(
+            tuple(l)
+            for l in [
+                self.pars,
+                self.vars,
+                self.auxvars,
+                self.inputs,
+                self.spec,
+                self.auxspec,
+            ]
+        )
         # dicts
-        for d in [self.auxfns, self.codeinserts]:
-            deflist.append(tuple(sortedDictItems(d, byvalue=False)))
+        deflist.extend(
+            tuple(sortedDictItems(d, byvalue=False))
+            for d in [self.auxfns, self.codeinserts]
+        )
         return hash(tuple(deflist))
 
     def recreate(self, targetlang):
@@ -324,7 +324,7 @@ class FuncSpec(object):
 
     def __call__(self):
         # info is defined in utils.py
-        utils_info(self.__dict__, "FuncSpec " + self.name)
+        utils_info(self.__dict__, f"FuncSpec {self.name}")
 
 
     # def info(self, verbose=1):
@@ -416,10 +416,11 @@ class FuncSpec(object):
                 raise ValueError('dependencies must be ordered pairs')
             firstpos = dependencies.index(d)
             assert d not in dependencies[firstpos+1:], \
-                   'dependency pairs must be unique'
-            assert i in all_vars, 'unknown variable name %s in dependencies'%i
-            assert o in self.vars or o in self.inputs, \
-                   'unknown variable name %s in dependencies'%o
+                       'dependency pairs must be unique'
+            assert i in all_vars, f'unknown variable name {i} in dependencies'
+            assert (
+                o in self.vars or o in self.inputs
+            ), f'unknown variable name {o} in dependencies'
         # No need to verify that dependencies are consistent with spec,
         # if spec was generated automatically
 
@@ -443,9 +444,9 @@ class FuncSpec(object):
                 self._protected_auxnames.append(name)
 
     def __validate_aux_spec(self, name, spec):
-        assert name not in ['auxvars', 'vfield'], \
-            ("auxiliary function name '" + name + "' clashes with internal"
-                " names")
+        assert name not in ['auxvars', 'vfield'], (
+            f"auxiliary function name '{name}" + "' clashes with internal" " names"
+        )
         assert len(spec) == 2, 'auxspec tuple must be of length 2'
         if not isinstance(spec[0], list):
             raise TypeError('aux function arguments must be given as a list')
@@ -461,8 +462,7 @@ class FuncSpec(object):
             assert self.varspecs != {}, 'varspecs attribute must be defined'
             assert set(self.vars) - set(self.varspecs.keys()) == set([]), 'Mismatch between declared variable names and varspecs keys'
             for name, spec in self.varspecs.items():
-                assert isinstance(spec, str), \
-                       "Specification for %s was not a string" % name
+                assert isinstance(spec, str), f"Specification for {name} was not a string"
             self.spec = self.codegen.generate_spec(self.vars, self.varspecs)
 
     def generate_user_module(self, eventstruct, **kwargs):
@@ -524,23 +524,23 @@ class FuncSpec(object):
                                            'to `for` macro. Expected 4')
                 istr = arglist[0]
                 allnames = self.vars + self.pars + self.inputs + self.auxvars \
-                           + self._protected_mathnames \
-                           + self._protected_randomnames \
-                           + self._protected_auxnames \
-                           + self._protected_scipynames \
-                           + self._protected_numpynames \
-                           + self._protected_specialfns \
-                           + self._protected_macronames \
-                           + self._protected_builtins \
-                           + ['True', 'False']
+                               + self._protected_mathnames \
+                               + self._protected_randomnames \
+                               + self._protected_auxnames \
+                               + self._protected_scipynames \
+                               + self._protected_numpynames \
+                               + self._protected_specialfns \
+                               + self._protected_macronames \
+                               + self._protected_builtins \
+                               + ['True', 'False']
                 assert istr not in allnames, ('loop index in `for` macro '
                                               'must not be a reserved name')
                 assert alphabet_chars_RE.match(istr[0]) is not None, \
-                       ('loop index symbol in `for` macro must start with '
+                           ('loop index symbol in `for` macro must start with '
                         'a letter')
                 for ichar in istr:
                     assert name_chars_RE.match(ichar) is not None, \
-                                         ('loop index symbol in `for` macro '
+                                             ('loop index symbol in `for` macro '
                                                 'must be alphanumeric')
                 ilo = int(arglist[1])
                 ihi = int(arglist[2])
@@ -570,10 +570,7 @@ class FuncSpec(object):
                     #     self.vars.append(sname)
                     # else:
                     #     self.auxvars.append(sname)
-            elif test_sum == -2:
-                pass
-                # no brackets found. regular definition line. take no action.
-            else:
+            elif test_sum != -2:
                 raise AssertionError('Misuse of square brackets in spec '
                                        'definition. Expected single'
                                  ' character between left and right brackets.')
@@ -594,8 +591,7 @@ class FuncSpec(object):
                     eval_pieces[ix] = eval_str
                 # otherwise may be a different, embedded temp index for another
                 # sum, etc., so don't touch it
-        keys = list(eval_pieces.keys())
-        keys.sort()
+        keys = sorted(eval_pieces.keys())
         ranges = remove_indices_from_range(keys, len(q.parser.tokenized)-1)
         # By virtue of this syntax, the first [] cannot be before some other text
         pieces = []
@@ -608,10 +604,10 @@ class FuncSpec(object):
                 pieces.append(''.join(q[r[0]:r[1]]))
             if ri+1 == len(ranges):
                 # last one - check if there's an eval piece placeholder to append at the end
-                if len(keys) > 0 and keys[-1] == r[-1]:
+                if keys and keys[-1] == r[-1]:
                     pieces.append('')
                     eval_ixs.append(len(pieces)-1)
-                # else do nothing
+                        # else do nothing
             else:
                 # in-between pieces, so append a placeholder for an eval piece
                 pieces.append('')
@@ -629,8 +625,7 @@ class FuncSpec(object):
 
     def _macroSum(self, istr, ilo, ihi, expr_in_i):
         def_dict = self._macroFor('', istr, int(ilo), int(ihi), expr_in_i)
-        retstr = '(' + "+".join([term.strip() for term in def_dict.values()]) + ')'
-        return retstr
+        return '(' + "+".join([term.strip() for term in def_dict.values()]) + ')'
 
     def processTokens(self, allnames, specialtokens, specstr,
                         var_arrayixstr, aux_arrayixstr, parsinps_names,

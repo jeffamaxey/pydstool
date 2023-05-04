@@ -47,9 +47,9 @@ class IntervalMembership(int):
         val = arg[0]
         if val == -1:
             self.valstr = 'uncertain'
-        if val == 0:
+        elif val == 0:
             self.valstr = 'notcontained'
-        if val == 1:
+        elif val == 1:
             self.valstr = 'contained'
         if self.__int__() not in [-1, 0, 1]:
             raise ValueError('Invalid value for numeric Interval membership type')
@@ -138,8 +138,7 @@ class Interval(object):
     def info(self, verboselevel=0):
         if verboselevel > 0:
             # info is defined in utils.py
-            info(self.__dict__, "Interval " + self.name,
-                 recurseDepthLimit=1+verboselevel)
+            info(self.__dict__, f"Interval {self.name}", recurseDepthLimit=1+verboselevel)
         else:
             print(self.__repr__())
 
@@ -238,17 +237,11 @@ class Interval(object):
         c = copy.copy(self)
         # switch endpoint order
         if isfinite(self._hival):
-            if self._hival==0:
-                new_lo = sign(val)*Inf
-            else:
-                new_lo = self.type(val/self._hival)
+            new_lo = sign(val)*Inf if self._hival==0 else self.type(val/self._hival)
         else:
             new_lo = val/self._hival
         if isfinite(self._loval):
-            if self._loval==0:
-                new_hi = sign(val)*Inf
-            else:
-                new_hi = self.type(val/self._loval)
+            new_hi = sign(val)*Inf if self._loval==0 else self.type(val/self._loval)
         else:
             new_hi = val/self._loval
         if new_hi < new_lo:
@@ -294,119 +287,107 @@ class Interval(object):
                 self._maxexp = max(loexp, hiexp)
             if isinstance(val, _num_name2equivtypes[self.typestr]):
                 compval = val
-                if compareNumTypes(self.type, _int_types):
+                eps = 0 if compareNumTypes(self.type, _int_types) else self._abseps
+            elif isinstance(val, _all_int):
+                compval = float(val)
+                eps = self._abseps
+            elif isinstance(val, _all_float):
+                # cannot ever compare a float in an integer interval,
+                # unless int(val) == val or val is not finite
+                if isinf(val):
+                    compval = val
+                    eps = 0
+                elif int(val) == val:
+                    compval = int(val)
                     eps = 0
                 else:
-                    eps = self._abseps
-            else:
-                if isinstance(val, _all_int):
-                    compval = float(val)
-                    eps = self._abseps
-                elif isinstance(val, _all_float):
-                    # cannot ever compare a float in an integer interval,
-                    # unless int(val) == val or val is not finite
-                    if isinf(val):
-                        compval = val
-                        eps = 0
-                    elif int(val) == val:
-                        compval = int(val)
-                        eps = 0
-                    else:
-                        raise PyDSTool_TypeError('Incorrect type of query value')
-                elif not val.issingleton:
-                    # catches non-intervals or non-singleton intervals
-                    if not val.defined:
-                        raise PyDSTool_ExistError('Input interval undefined')
-                    if not compareNumTypes(val.type, self.type) and \
+                    raise PyDSTool_TypeError('Incorrect type of query value')
+            elif not val.issingleton:
+                # catches non-intervals or non-singleton intervals
+                if not val.defined:
+                    raise PyDSTool_ExistError('Input interval undefined')
+                if not compareNumTypes(val.type, self.type) and \
                        compareNumTypes(val.type, _all_float):
-                        # meaningless to ask if float interval is contained in an
-                        # integer interval!
-                        raise PyDSTool_TypeError('Interval type mismatch')
-                    if compareNumTypes(val.type, self.type) and \
+                    # meaningless to ask if float interval is contained in an
+                    # integer interval!
+                    raise PyDSTool_TypeError('Interval type mismatch')
+                if compareNumTypes(val.type, self.type) and \
                        compareNumTypes(self.type, _all_int):
-                        eps = 0
-                    else:
-                        eps = max(self._abseps, val._abseps)
-                        try:
-                            minexpallowed = math.ceil(-MIN_EXP - self._maxexp)
-                        except (TypeError, OverflowError):
-                            # _maxexp is None
-                            minexpallowed = Inf
-                        if eps > 0 and -math.log(eps,10) > minexpallowed:
-                            eps = math.pow(10,-minexpallowed)
-                    if isfinite(val._loval) or isfinite(self._loval):
-                        tempIlo = val._loval >= (self._loval + eps)
-                    else:
-                        tempIlo = False
-                    if isfinite(val._hival) or isfinite(self._hival):
-                        tempIhi = val._hival <= (self._hival - eps)
-                    else:
-                        tempIhi = False
-                    if tempIlo and tempIhi:
-                        return contained
-                    elif eps == 0:
-                        return notcontained
-                    else:
-                        # having already tested for being contained, this is
-                        # sufficient for uncertainty
-                        if isfinite(val._loval) or isfinite(self._loval):
-                            tempUlo = val._loval > (self._loval - eps)
-                            tempElo = val._loval <= (self._loval - eps)
-                        else:
-                            tempUlo = val._loval == self._loval
-                            tempElo = False
-                        if isfinite(val._hival) or isfinite(self._hival):
-                            tempUhi = val._hival < (self._hival + eps)
-                            tempEhi = val._hival >= (self._hival + eps)
-                        else:
-                            tempUhi = val._hival == self._hival
-                            tempEhi = False
-                        if ((tempUlo and not tempEhi) or (tempUhi and \
-                                                         not tempElo)) \
-                                         and not self.isdiscrete:
-                            return uncertain
-                        else:
-                            # else must be notcontained
-                            return notcontained
+                    eps = 0
                 else:
-                    # val is a singleton interval type
-                    # issingleton == True implies interval is defined
-                    # Now go through same sequence of comparisons
-                    if compareNumTypes(val.type, self.type):
-                        compval = val.get()
-                        if compareNumTypes(self.type, _all_int):
-                            eps = 0
-                        else:
-                            eps = max(self._abseps, val._abseps)
-                            try:
-                                loexp = math.log(abs(self._loval), 10)
-                            except (OverflowError, ValueError):
-                                loexp = 0
-                            try:
-                                hiexp = math.log(abs(self._hival), 10)
-                            except (OverflowError, ValueError):
-                                hiexp = 0
-                            minexpallowed = math.ceil(-MIN_EXP - max(loexp,
-                                                                     hiexp))
-                            if eps > 0 and -math.log(eps,10) > minexpallowed:
-                                eps = math.pow(10,-minexpallowed)
+                    eps = max(self._abseps, val._abseps)
+                    try:
+                        minexpallowed = math.ceil(-MIN_EXP - self._maxexp)
+                    except (TypeError, OverflowError):
+                        # _maxexp is None
+                        minexpallowed = Inf
+                    if eps > 0 and -math.log(eps,10) > minexpallowed:
+                        eps = math.pow(10,-minexpallowed)
+                tempIlo = (
+                    val._loval >= (self._loval + eps)
+                    if isfinite(val._loval) or isfinite(self._loval)
+                    else False
+                )
+                tempIhi = (
+                    val._hival <= (self._hival - eps)
+                    if isfinite(val._hival) or isfinite(self._hival)
+                    else False
+                )
+                if tempIlo and tempIhi:
+                    return contained
+                elif eps == 0:
+                    return notcontained
+                else:
+                    # having already tested for being contained, this is
+                    # sufficient for uncertainty
+                    if isfinite(val._loval) or isfinite(self._loval):
+                        tempUlo = val._loval > (self._loval - eps)
+                        tempElo = val._loval <= (self._loval - eps)
                     else:
-                        if compareNumTypes(val.type, _all_int):
-                            compval = val.get()
-                            eps = self._abseps
-                        elif compareNumTypes(val.type, _all_float):
-                            # cannot ever compare a float in an integer interval
-                            # unless bd values are equal to their int() versions
-                            if int(val._loval) == val._loval and \
-                               int(val._hival) == val._hival:
-                                compval = (int(val[0]), int(val[1]))
-                                eps = 0
-                            else:
-                                raise PyDSTool_TypeError('Invalid numeric type '
-                                                         'of query value')
-                        else:  # unexpected (internal) error
-                            raise PyDSTool_TypeError('Invalid numeric type of '
-                                                     'query value')
+                        tempUlo = val._loval == self._loval
+                        tempElo = False
+                    if isfinite(val._hival) or isfinite(self._hival):
+                        tempUhi = val._hival < (self._hival + eps)
+                        tempEhi = val._hival >= (self._hival + eps)
+                    else:
+                        tempUhi = val._hival == self._hival
+                        tempEhi = False
+                    return (
+                        uncertain
+                        if ((tempUlo and not tempEhi) or (tempUhi and not tempElo))
+                        and not self.isdiscrete
+                        else notcontained
+                    )
+            elif compareNumTypes(val.type, self.type):
+                compval = val.get()
+                if compareNumTypes(self.type, _all_int):
+                    eps = 0
+                else:
+                    eps = max(self._abseps, val._abseps)
+                    try:
+                        loexp = math.log(abs(self._loval), 10)
+                    except (OverflowError, ValueError):
+                        loexp = 0
+                    try:
+                        hiexp = math.log(abs(self._hival), 10)
+                    except (OverflowError, ValueError):
+                        hiexp = 0
+                    minexpallowed = math.ceil(-MIN_EXP - max(loexp,
+                                                             hiexp))
+                    if eps > 0 and -math.log(eps,10) > minexpallowed:
+                        eps = math.pow(10,-minexpallowed)
+            elif compareNumTypes(val.type, _all_int):
+                compval = val.get()
+                eps = self._abseps
+            elif compareNumTypes(val.type, _all_float):
+                if int(val._loval) != val._loval or int(val._hival) != val._hival:
+                    raise PyDSTool_TypeError('Invalid numeric type '
+                                             'of query value')
+                compval = (int(val[0]), int(val[1]))
+                eps = 0
+            else:  # unexpected (internal) error
+                raise PyDSTool_TypeError('Invalid numeric type of '
+                                         'query value')
         except AttributeError:
             raise PyDSTool_TypeError('Expected a numeric type or a singleton '
                                  'interval. Got type '+str(type(val)))
@@ -425,7 +406,7 @@ class Interval(object):
                 tempElo = compval <= (self._loval - eps)
                 tempEhi = compval >= (self._hival + eps)
                 if ((tempUlo and not tempEhi) or (tempUhi and not tempElo)) and \
-                             not self.isdiscrete:
+                                 not self.isdiscrete:
                     return uncertain
                 # else must be notcontained
                 else:
@@ -441,22 +422,20 @@ class Interval(object):
             raise PyDSTool_TypeError("Can only intersect with other Intervals "
                                      "having same numeric type")
         if compareNumTypes(self.type, _all_complex) or \
-           compareNumTypes(other.type, _all_complex):
+               compareNumTypes(other.type, _all_complex):
             raise TypeError("Complex intervals not supported")
         if self.contains(other):
             result = other
         elif other.contains(self):
             result = self
-        else:
-            # no total containment possible
-            if other.contains(self._hival) is contained:
-                # then also self.contains(other._loval)
-                result = Interval('__result__', self.type, [other._loval,
-                                                    self._hival])
-            elif other.contains(self._loval) is contained:
-                # then also self.contains(other._hival)
-                result = Interval('__result__', self.type, [self._loval,
-                                                    other._hival])
+        elif other.contains(self._hival) is contained:
+            # then also self.contains(other._loval)
+            result = Interval('__result__', self.type, [other._loval,
+                                                self._hival])
+        elif other.contains(self._loval) is contained:
+            # then also self.contains(other._hival)
+            result = Interval('__result__', self.type, [self._loval,
+                                                other._hival])
         return result
 
 
@@ -563,14 +542,13 @@ class Interval(object):
                 try:
                     if not loval < hival:
                         print("set() was passed loval = ", loval, \
-                            " and hival = ", hival)
+                                " and hival = ", hival)
                         raise PyDSTool_ValueError('Interval endpoints must be '
                                         'given in order of increasing size')
                 except TypeError:
                     # unorderable types
                     pass
-                self._intervalstr = '['+str(loval)+',' \
-                                    +str(hival)+']'
+                self._intervalstr = f'[{str(loval)},{str(hival)}]'
                 if compareNumTypes(type(loval), self.type):
                     self._loval = loval
                 elif compareNumTypes(self.type, _float_types):
@@ -592,10 +570,10 @@ class Interval(object):
                 self.defined = True
         elif isinstance(arg, (_int_types, _float_types)):
             assert isfinite(arg), \
-                   "Singleton interval domain value must be finite"
+                       "Singleton interval domain value must be finite"
             if self.isdiscrete:
                 # int types or floats=ints only
-                if not int(arg)==arg:
+                if int(arg) != arg:
                     raise TypeError("Invalid interval singleton type")
             else:
                 arg = float(arg)
@@ -640,36 +618,29 @@ class Interval(object):
     def get(self, ix=None):
         """Get the interval as a tuple or a number (for singletons),
         or an endpoint if ix is not None"""
-        if self.defined:
-            if ix == 0:
-                return self._loval
-            elif ix == 1:
-                return self._hival
-            elif ix is None:
-                if self.issingleton:
-                    return self._loval
-                else:
-                    return [self._loval, self._hival]
-            else:
-                raise PyDSTool_TypeError('Invalid return form specified')
-        else:
+        if not self.defined:
             raise PyDSTool_ExistError('Interval undefined')
+        if ix == 0:
+            return self._loval
+        elif ix == 1:
+            return self._hival
+        elif ix is None:
+            return self._loval if self.issingleton else [self._loval, self._hival]
+        else:
+            raise PyDSTool_TypeError('Invalid return form specified')
 
 
     def _infostr(self, verbose=1):
         """Get info on a known interval definition."""
 
         if verbose > 0:
-            infostr = "Interval "+self.name+"\n"
+            infostr = f"Interval {self.name}" + "\n"
             if self.defined:
-                infostr += '  ' + self.typestr+': '+\
-                          self.name+' = '+self._intervalstr+ \
-                          ' @ eps = '+str(self._abseps)
+                infostr += f'  {self.typestr}: {self.name} = {self._intervalstr} @ eps = {str(self._abseps)}'
             else:
-                infostr += '  ' + self.typestr+': '+self.name+' @ eps = '+ \
-                          str(self._abseps) + " (not fully defined)"
+                infostr += f'  {self.typestr}: {self.name} @ eps = {str(self._abseps)} (not fully defined)'
         else:
-            infostr = "Interval "+self.name
+            infostr = f"Interval {self.name}"
         return infostr
 
 

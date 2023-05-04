@@ -35,7 +35,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 
-if sys.version_info[0:2] < (3, 6):
+if sys.version_info[:2] < (3, 6):
     raise RuntimeError("Python 3.6+ required.")
 
 
@@ -81,8 +81,10 @@ def get_datafiles():
     source_dirs = ['examples', 'tests']
     datafiles = []
     for s in source_dirs:
-        for d, _, files in os.walk(s):
-            datafiles.append((d, [os.path.join(d, f) for f in files]))
+        datafiles.extend(
+            (d, [os.path.join(d, f) for f in files])
+            for d, _, files in os.walk(s)
+        )
     return datafiles
 
 
@@ -95,15 +97,9 @@ setup(
     version=__version__,
     packages=find_packages(),
     setup_requires=pytest_runner,
-    install_requires=[
-        "scipy>=1.0,<2.0",
-        "numpy>=1.6"
-    ],
+    install_requires=["scipy>=1.0,<2.0", "numpy>=1.6"],
     tests_require=['pytest', 'pytest-mock', 'pytest-xdist'],
-    cmdclass={
-        'test': PyTest,
-        'clean': clean
-    },
+    cmdclass={'test': PyTest, 'clean': clean},
     author="Rob Clewley; W. Erik Sherwood; M. Drew Lamar; Vladimir Zakharov",
     author_email="rob.clewley@gmail.com",
     maintainer="Rob Clewley",
@@ -113,7 +109,7 @@ setup(
     license="BSD",
     keywords="dynamical systems, bioinformatics, modeling, bifurcation analysis",
     url="https://pydstool.github.io/PyDSTool/FrontPage.html",
-    download_url="https://github.com/robclewley/pydstool/tarball/v%s" % __version__,
+    download_url=f"https://github.com/robclewley/pydstool/tarball/v{__version__}",
     include_package_data=True,
     platforms=["any"],
     package_data={

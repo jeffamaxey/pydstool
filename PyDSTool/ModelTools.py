@@ -176,19 +176,19 @@ class MDescriptor(Descriptor):
             all_vars = ms.modelspec.search('Var')
             dyn_vars = [v for v in all_vars if ms.modelspec._registry[v].obj.specType == 'RHSfuncSpec']
             vars_i = alltrue([varname in self.icvalues for \
-                              varname in dyn_vars])
+                                  varname in dyn_vars])
             pars_i = alltrue([(parname in self.parvalues or \
-                               par.spec.specStr !='') \
-                          for parname, par in ms.modelspec.pars.items()])
+                                   par.spec.specStr !='') \
+                              for parname, par in ms.modelspec.pars.items()])
             inps_i = alltrue([inpname in self.inputs for \
-                              inpname in ms.modelspec.inputs])
+                                  inpname in ms.modelspec.inputs])
             if verbose:
                 if not vars_i:
-                    print(ms.modelspec.name + "Some ICs missing")
+                    print(f"{ms.modelspec.name}Some ICs missing")
                 if not pars_i:
-                    print(ms.modelspec.name + "Some param values missing")
+                    print(f"{ms.modelspec.name}Some param values missing")
                 if not inps_i:
-                    print(ms.modelspec.name + "Some input values missing")
+                    print(f"{ms.modelspec.name}Some input values missing")
             vars_i_all = vars_i_all and vars_i
             pars_i_all = pars_i_all and pars_i
             inps_i_all = inps_i_all and inps_i
@@ -198,7 +198,7 @@ class MDescriptor(Descriptor):
         if name in self.generatorspecs:
             return self.generatorspecs[name]
         else:
-            raise KeyError('Generator %s does not exist in registry'%name)
+            raise KeyError(f'Generator {name} does not exist in registry')
 
     def add(self, gd):
         self.generatorspecs[gd.modelspec.name] = gd
@@ -240,10 +240,7 @@ class GeneratorConstructor(object):
         self.mspec = mspec
         # user events are additional to the intrinsic constraint events
         # that are made automatically from the variables' bounds information
-        if userevents is None:
-            self.userevents = []
-        else:
-            self.userevents = copy.copy(userevents)
+        self.userevents = [] if userevents is None else copy.copy(userevents)
         if userfns is None:
             self.userfns = {}
         else:
@@ -255,35 +252,17 @@ class GeneratorConstructor(object):
             self.targetGen = targetGen
         else:
             raise TypeError("targetGen argument must be a string")
-        if algparams is None:
-            self.algparams = {}
-        else:
-            self.algparams = copy.copy(algparams)
+        self.algparams = {} if algparams is None else copy.copy(algparams)
         self.indepvarname = indepvar[0]
         self.indepvardomain = indepvar[1]
         self.tdata = tdata
-        if inputs is None:
-            self.inputs = {}
-        else:
-            self.inputs = copy.copy(inputs)
-        if parvalues is None:
-            self.parvalues = {}
-        else:
-            self.parvalues = copy.copy(parvalues)
-        if icvalues is None:
-            self.icvalues = {}
-        else:
-            self.icvalues = copy.copy(icvalues)
+        self.inputs = {} if inputs is None else copy.copy(inputs)
+        self.parvalues = {} if parvalues is None else copy.copy(parvalues)
+        self.icvalues = {} if icvalues is None else copy.copy(icvalues)
         self.checklevel = checklevel
         self.forcedAuxVars = []
-        if options is None:
-            self.optDict = {}
-        else:
-            self.optDict = copy.copy(options)
-        if reuseTerms is None:
-            self.reuseTerms = {}
-        else:
-            self.reuseTerms = copy.copy(reuseTerms)
+        self.optDict = {} if options is None else copy.copy(options)
+        self.reuseTerms = {} if reuseTerms is None else copy.copy(reuseTerms)
         self.vfcodeinsert_start = ""
         self.vfcodeinsert_end = ""
         if activatedBounds is None:
@@ -291,20 +270,11 @@ class GeneratorConstructor(object):
         else:
             self.activatedBounds = copy.copy(activatedBounds)
         self.activateAllBounds = activateAllBounds  # overrides activatedBounds
-        if abseps is None:
-            self.abseps = 1e-13
-        else:
-            self.abseps = abseps
+        self.abseps = 1e-13 if abseps is None else abseps
         # List of parameter names associated solely with events
-        if eventPars is None:
-            self.eventPars = []
-        else:
-            self.eventPars = copy.copy(eventPars)
+        self.eventPars = [] if eventPars is None else copy.copy(eventPars)
         self.preReuse = preReuse
-        if preReuseTerms is None:
-            self.preReuseTerms = {}
-        else:
-            self.preReuseTerms = copy.copy(preReuseTerms)
+        self.preReuseTerms = {} if preReuseTerms is None else copy.copy(preReuseTerms)
         self.preFlat = preFlat
 
 

@@ -54,6 +54,7 @@ Robert Clewley, October 2005.
     Added support for symbolic vectors.
 """
 
+
 # ----------------------------------------------------------------------------
 
 import os, sys, types
@@ -136,11 +137,7 @@ __all__ = _functions + _classes + _constants
 # create namemap for title-case to lower case for evaluation
 # to float attempt
 feval_map_const = {'e': repr(e), 'pi': repr(pi)}
-feval_map_symb = {}
-for symb in allmathnames_symbolic:
-    feval_map_symb[symb] = symb.lower()
-
-
+feval_map_symb = {symb: symb.lower() for symb in allmathnames_symbolic}
 # -----------------------------------------------------------------------------
 ## Enable mathematical functions to be used like QuantSpecs when building
 ## model specs, by substituting overloaded objects with the same names in
@@ -150,15 +147,12 @@ mathlookup = {}.fromkeys(protected_mathnames, 'math.')
 randomlookup = {}.fromkeys(protected_randomnames, 'random.')
 builtinlookup = {'abs': '', 'pow': '', 'max': '', 'min': '', 'sum': ''}
 numpylookup = {}.fromkeys(protected_numpynames, 'numpy.')
-scipylookup = {}.fromkeys(protected_scipynames, 'scipy.')
-scipylookup.update( {}.fromkeys(scipy_specialfns, 'scipy.special.') )
-modlookup = {}
-modlookup.update(mathlookup)
-modlookup.update(randomlookup)
-modlookup.update(builtinlookup)
-modlookup.update(scipylookup)
-modlookup.update(numpylookup)
-
+scipylookup = {}.fromkeys(protected_scipynames, 'scipy.') | {}.fromkeys(
+    scipy_specialfns, 'scipy.special.'
+)
+modlookup = (
+    mathlookup | randomlookup | builtinlookup | scipylookup | numpylookup
+)
 # only rename actual functions (or callable objects)
 
 # DEBUG VERSION
@@ -189,7 +183,7 @@ class _mathobj(object):
         args = list(argtuple)
         isQuantity = [compareClassAndBases(a,Quantity) for a in args]
         isQuantSpec = [compareClassAndBases(a,QuantSpec) for a in args]
-        if len(args) == 0:
+        if not args:
             return QuantSpec("__result__", self.name)
         elif sometrue(isQuantity+isQuantSpec):
             if not sometrue(isQuantity):
@@ -206,8 +200,9 @@ class _mathobj(object):
                             # non-mathname QS then no conversion -- return a QS
                             symbs = args[i].usedSymbols
                             allnonnumbers = [n for n in symbs if isNameToken(n)]
-                            if len(allnonnumbers) > 0 \
-                               and alltrue([n in allmathnames for n in allnonnumbers]):
+                            if allnonnumbers and alltrue(
+                                [n in allmathnames for n in allnonnumbers]
+                            ):
                                 namemap = dict(zip(allnonnumbers,
                                                [a.lower() for a in allnonnumbers]))
                                 args[i].mapNames(namemap)
@@ -218,14 +213,13 @@ class _mathobj(object):
             else:
                 convert = False
             argstr = ", ".join(map(str, args))
-            if convert:
-                try:
-                    return eval(self.name.lower())(*args)
-                except TypeError:
-                    print("Failed to evaluate function %s on args:"%self.name.lower() + argstr)
-                    raise
-            else:
-                return QuantSpec("__result__", self.name + "(" + argstr +")")
+            if not convert:
+                return QuantSpec("__result__", f"{self.name}({argstr})")
+            try:
+                return eval(self.name.lower())(*args)
+            except TypeError:
+                print(f"Failed to evaluate function {self.name.lower()} on args:{argstr}")
+                raise
         else:
             arglist = []
             for a in args:
@@ -237,16 +231,16 @@ class _mathobj(object):
                 return float(eval(self.name.lower())(*arglist))
             except NameError:
                 argstr = ", ".join(map(str, args))
-                return QuantSpec("__result__", self.name + "(" + argstr +")")
+                return QuantSpec("__result__", f"{self.name}({argstr})")
             except TypeError:
-                print("Error evaluating %s on args:"%self.name.lower() + args)
+                print(f"Error evaluating {self.name.lower()} on args:{args}")
                 raise
 
     def __str__(self):
         return self.name
 
     def __repr__(self):
-        return self.name + " (ModelSpec wrapper)"
+        return f"{self.name} (ModelSpec wrapper)"
 
 
 # now assign all the function names to _mathobj versions
@@ -255,7 +249,7 @@ for f in funcnames:
         # skip this because it's also a module name and it messes around
         # with the namespace too much
         continue
-    exec(str(f).title() + " = _mathobj('"+f+"')")
+    exec(f"{str(f).title()} = _mathobj('{f}')")
     math_globals[str(f).title()] = eval(str(f).title())
 # assignment of constants' names continues after QuantSpec is defined
 
@@ -287,14 +281,10 @@ def getdim(s):
 def strIfSeq(x):
     """Convert sequence of QuantSpecs or strings to a string representation of
     that sequence, otherwise return the argument untouched."""
-    if isinstance(x, _seq_types):
-        if len(x) > 0:
-            xstrlist = list(map(str,x))
-            return '['+",".join(xstrlist)+']'
-        else:
-            return x
-    else:
+    if not isinstance(x, _seq_types) or len(x) <= 0:
         return x
+    xstrlist = list(map(str,x))
+    return '['+",".join(xstrlist)+']'
 
 
 def ensureQlist(thelist):
@@ -302,7 +292,7 @@ def ensureQlist(thelist):
     for s in thelist:
         if isinstance(s, str):
             o.append(QuantSpec('__dummy__', s))
-        elif isinstance(s, QuantSpec) or isinstance(s, Quantity):
+        elif isinstance(s, (QuantSpec, Quantity)):
             o.append(s)
         else:
             raise TypeError("Invalid type for symbolic quantities list")
@@ -328,7 +318,7 @@ def ensureStrArgDict(d, renderForCode=True):
         # d is not a Point or Dictionary
         if isinstance(d, list):
             for q in d:
-                o.update(ensureStrArgDict(q))
+                o |= ensureStrArgDict(q)
         else:
             try:
                 if hasattr(d, 'signature'):
@@ -339,31 +329,22 @@ def ensureStrArgDict(d, renderForCode=True):
                         o[d.name] = (d.signature, d.spec.specStr)
                 elif hasattr(d, 'name'):
                     # d is any other type of Quantity
-                    if renderForCode:
-                        o[d.name] = str(d.spec.renderForCode())
-                    else:
-                        o[d.name] = d.spec.specStr
+                    o[d.name] = str(d.spec.renderForCode()) if renderForCode else d.spec.specStr
                 elif hasattr(d, 'subjectToken'):
                     # d is a QuantSpec
-                    if renderForCode:
-                        o[d.subjectToken] = str(d.renderForCode())
-                    else:
-                        o[d.subjectToken] = d.specStr
+                    o[d.subjectToken] = str(d.renderForCode()) if renderForCode else d.specStr
                 else:
-                    raise TypeError("Invalid type %s"%str(type(d)))
+                    raise TypeError(f"Invalid type {str(type(d))}")
             except TypeError as err:
                 print("Argument was:%s\n" % d)
-                raise TypeError("Invalid argument type: %s "%str(err) + \
-                   "or argument's values cannot be converted to key:value" + \
-                                "strings")
+                raise TypeError(
+                    f"Invalid argument type: {str(err)} or argument's values cannot be converted to key:valuestrings"
+                )
     return o
 
 
 def _eval(q, math_globals, local_free, eval_at_runtime):
-    if isinstance(q, str):
-        qstr = q
-    else:
-        qstr = str(q)
+    qstr = q if isinstance(q, str) else str(q)
     try:
         val = eval(qstr, math_globals, local_free)
     except NameError as err:
@@ -397,17 +378,16 @@ def _propagate_str_eval(s):
     elif isinstance(s, str):
         return s
     else:
-        raise TypeError("Don't know how to evaluate to string: %s"%(str(s)))
+        raise TypeError(f"Don't know how to evaluate to string: {str(s)}")
 
 
 def _join_sublist(qspec, math_globals, local_free, eval_at_runtime):
-    if qspec.isvector():
-        sl = qspec.fromvector()
-        # sl is guaranteed to be seq of QuantSpecs
-        return "["+",".join([str(_eval(q, math_globals, local_free,
-                        eval_at_runtime)) for q in sl])+"]"
-    else:
+    if not qspec.isvector():
         return str(_eval(qspec, math_globals, local_free, eval_at_runtime))
+    sl = qspec.fromvector()
+    # sl is guaranteed to be seq of QuantSpecs
+    return "["+",".join([str(_eval(q, math_globals, local_free,
+                    eval_at_runtime)) for q in sl])+"]"
 
 
 def expr2fun(qexpr, ensure_args=None, ensure_dynamic=None, fn_name='',

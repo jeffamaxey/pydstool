@@ -132,12 +132,7 @@ def who(typelist=None, objdict=None, verboselevel=0, returnlevel=0,
     """
     objdict_out = {}   # for returning if returnlevel > 0
     if objdict is None:
-        if _localCall:
-            # e.g. from saveSession or restart, then need to look one
-            # stack frame further back.
-            frame = sys._getframe().f_back.f_back
-        else:
-            frame = sys._getframe().f_back
+        frame = sys._getframe().f_back.f_back if _localCall else sys._getframe().f_back
         objdict = frame.f_globals
     # Generator_ is an alias for PyDSTool.Generator.baseclasses.Generator
     # Model_ is an alias for PyDSTool.Model.Model
@@ -162,23 +157,16 @@ def who(typelist=None, objdict=None, verboselevel=0, returnlevel=0,
                 #    typelist_actual.append(t)
                 #else:
                 #    raise TypeError("Invalid PyDSTool object types passed")
+    elif typelist == Model:
+        # user meant Model.Model, i.e. local name Model_
+        typelist_actual = [Model_]
+    elif typelist == Generator:
+        # user meant Generator.Generator, i.e. local name Generator_
+        typelist_actual = [Generator_]
+    elif typelist == array:
+        typelist_actual = [numpy.ndarray]
     else:
-        # hacks for taking care of class naming problems
-        # when typelist is a singleton (type)
-        if typelist == Model:
-            # user meant Model.Model, i.e. local name Model_
-            typelist_actual = [Model_]
-        elif typelist == Generator:
-            # user meant Generator.Generator, i.e. local name Generator_
-            typelist_actual = [Generator_]
-        elif typelist == array:
-            typelist_actual = [numpy.ndarray]
-        else:
-            typelist_actual = [typelist]
-        #elif compareClassAndBases(typelist, _pyDSToolTypes):
-        #    typelist_actual = [typelist]
-        #else:
-        #    raise TypeError("Invalid PyDSTool object types passed")
+        typelist_actual = [typelist]
     for objname, obj in objdict.items():
         if not isinstance(obj, (type, types.ModuleType)):
             if compareClassAndBases(obj, typelist_actual):
@@ -189,12 +177,15 @@ def who(typelist=None, objdict=None, verboselevel=0, returnlevel=0,
                 objdict_out[objname] = obj
             elif deepSearch:
                 if isinstance(obj, (list, tuple)):
-                    if any([compareClassAndBases(x, typelist_actual) \
-                                 for x in obj]):
+                    if any(
+                        compareClassAndBases(x, typelist_actual) for x in obj
+                    ):
                         objdict_out[objname] = obj
                 elif isinstance(obj, dict):
-                    if any([compareClassAndBases(x, typelist_actual) \
-                                 for x in obj.values()]):
+                    if any(
+                        compareClassAndBases(x, typelist_actual)
+                        for x in obj.values()
+                    ):
                         objdict_out[objname] = obj
     if returnlevel == 1:
         # silent mode -- just return the objects
@@ -209,13 +200,12 @@ def who(typelist=None, objdict=None, verboselevel=0, returnlevel=0,
                 print("\n"*(verboselevel-1))
             if hasattr(obj, '_infostr') and not isinstance(obj, type):
                 try:
-                    print(objname + ": " + obj._infostr(verboselevel))
+                    print(f"{objname}: {obj._infostr(verboselevel)}")
                 except:
-                    print("Problem with: %s, %s, %s" %(objname, className(obj), obj.info))
+                    print(f"Problem with: {objname}, {className(obj)}, {obj.info}")
                     raise
             else:
-                print(objname + " (Class " + className(obj) + ")" \
-                      + (verboselevel > 0)*":")
+                print((f"{objname} (Class {className(obj)})" + (verboselevel > 0)*":"))
                 if verboselevel > 0:
                     info(obj, objname, recurseDepthLimit=verboselevel-1)
 
@@ -226,13 +216,13 @@ __symbolic_ext = 'sym'
 def saveSession(sessionName=None, force=False, silent=False, deepSearch=False):
     if sessionName is None:
         datestr = time.strftime("%Y %m %d _ %Hh%Mm").replace(" ","")[2:]
-        sessionName = "Session_" + datestr
+        sessionName = f"Session_{datestr}"
     objdict = who(returnlevel=2, _localCall=True, deepSearch=deepSearch)
     objnamelist, objlist = sortedDictLists(objdict, byvalue=False)
     # objnamelist stores the original names of the objects saved, for use
     # when restoring the session
     objlist.append(objnamelist)
-    saveObjects(objlist, sessionName+'.'+__session_ext, force)
+    saveObjects(objlist, f'{sessionName}.{__session_ext}', force)
     if not silent:
         print("Important!")
         print("If you used any user-defined classes for ModelSpec, these need to ")
@@ -248,11 +238,11 @@ def loadSession(sessionName, tolocals=False):
 
     sessionName_split = sessionName.split('.')
     if sessionName_split[-1] != __session_ext:
-        sessionName = sessionName + '.' + __session_ext
+        sessionName = f'{sessionName}.{__session_ext}'
     try:
         loadlist = loadObjects(sessionName)
     except:
-        print("Problem loading session " + sessionName)
+        print(f"Problem loading session {sessionName}")
         raise
     numobjs = len(loadlist) - 1   # last entry is obj name list
     if len(loadlist) <= 0:
@@ -260,10 +250,7 @@ def loadSession(sessionName, tolocals=False):
     objnamelist = loadlist[-1]
     objlist = loadlist[:-1]
     frame = sys._getframe().f_back
-    if tolocals:
-        nspace = frame.f_locals
-    else:
-        nspace = frame.f_globals
+    nspace = frame.f_locals if tolocals else frame.f_globals
     # bind the original session names for the objects to the objects
     try:
         for i in range(numobjs):

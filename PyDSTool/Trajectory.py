@@ -67,16 +67,13 @@ def convert_ptlabel_events(pts, return_vals_dict=False):
     With return_vals_dict=True (default False), the corresponding dictionary
     of pointlists for those events will be returned.
     """
-    ev_labels = []
-    for l in pts.labels.getLabels():
-        if 'Event:' in l:
-            ev_labels.append(l[6:])
+    ev_labels = [l[6:] for l in pts.labels.getLabels() if 'Event:' in l]
     event_times = {}
     event_vals = {}
     for l in ev_labels:
         ts = []
         ixlist = []
-        ix_dict = pts.labels.by_label['Event:'+l]
+        ix_dict = pts.labels.by_label[f'Event:{l}']
         # don't use tdict in labels in case indepvararray has been re-scaled
         for ix in ix_dict.keys():
             ts.append(pts.indepvararray[ix])
@@ -87,10 +84,7 @@ def convert_ptlabel_events(pts, return_vals_dict=False):
             event_vals[l] = pointsToPointset([pts[ix] for ix in ixlist],
                                              't', ts)
         event_times[l] = ts
-    if return_vals_dict:
-        return event_times, event_vals
-    else:
-        return event_times
+    return (event_times, event_vals) if return_vals_dict else event_times
 
 
 def pointset_to_traj(pts, events=None):
@@ -138,14 +132,17 @@ class Trajectory(object):
         else:
             raise TypeError("name argument must be a string")
         varlist = vals
-        if isinstance(varlist, Variable):
+        if (
+            not isinstance(varlist, Variable)
+            and isinstance(varlist, _seq_types)
+            and not isinstance(varlist[0], Variable)
+            or not isinstance(varlist, Variable)
+            and not isinstance(varlist, _seq_types)
+        ):
+            raise TypeError("vals argument must contain Variable objects")
+        elif isinstance(varlist, Variable):
             # then a singleton was passed
             varlist = [varlist]
-        elif isinstance(varlist, _seq_types):
-            if not isinstance(varlist[0], Variable):
-                raise TypeError("vals argument must contain Variable objects")
-        else:
-            raise TypeError("vals argument must contain Variable objects")
         if coordnames is None:
             self.coordnames = [v.name for v in varlist]
         else:
@@ -182,15 +179,15 @@ class Trajectory(object):
                     pass
         # non-parameterized trajectory?
         indepvarname = varlist[0].indepvarname
-        if indepvarname in self.coordnames or not parameterized:
-            self._parameterized = False
-        else:
-            self._parameterized = True
+        self._parameterized = bool(
+            indepvarname not in self.coordnames and parameterized
+        )
         indepvartype = varlist[0].indepvartype
-        if not all([compareNumTypes(v.coordtype, float) for v in varlist]):
-            coordtype = float
-        else:
-            coordtype = varlist[0].coordtype
+        coordtype = (
+            varlist[0].coordtype
+            if all(compareNumTypes(v.coordtype, float) for v in varlist)
+            else float
+        )
         self.depdomain = {}
         if varlist[0].trajirange is None:
             indepdomain = varlist[0].indepdomain
@@ -200,23 +197,22 @@ class Trajectory(object):
             self.depdomain[varlist[0].coordname] = varlist[0].trajdrange
         for v in varlist[1:]:
             if isinstance(indepdomain, ndarray):
-                if v.trajirange is None:
-                    if all(v.indepdomain != indepdomain):
-                        raise ValueError("Some variables in varlist argument "
-                                "have different independent variable domains")
-                else:
-                    if all(v.trajirange != indepdomain):
-                        raise ValueError("Some variables in varlist argument "
-                                "have different independent variable domains")
-            else:
-                if v.trajirange is None:
-                    if v.indepdomain != indepdomain:
-                        raise ValueError("Some variables in varlist argument "
-                                "have different independent variable domains")
-                else:
-                    if v.trajirange != indepdomain:
-                        raise ValueError("Some variables in varlist argument "
-                                "have different independent variable domains")
+                if (
+                    v.trajirange is None
+                    and all(v.indepdomain != indepdomain)
+                    or v.trajirange is not None
+                    and all(v.trajirange != indepdomain)
+                ):
+                    raise ValueError("Some variables in varlist argument "
+                            "have different independent variable domains")
+            elif (
+                v.trajirange is None
+                and v.indepdomain != indepdomain
+                or v.trajirange is not None
+                and v.trajirange != indepdomain
+            ):
+                raise ValueError("Some variables in varlist argument "
+                        "have different independent variable domains")
             if v.indepvarname != indepvarname:
                 raise ValueError("Some variables in varlist "
                   "argument have different independent variable names")
@@ -266,10 +262,7 @@ class Trajectory(object):
             self.modelEventStructs = None
         else:
             self.modelEventStructs = copy.copy(modelEventStructs)
-        if events is None:
-            self.events = {}
-        else:
-            self.events = copy.copy(events)
+        self.events = {} if events is None else copy.copy(events)
         if eventTimes is None:
             self._createEventTimes()
         else:
@@ -293,8 +286,9 @@ class Trajectory(object):
 
     def delete_variables(self, coords):
         """coords is a list of coordinate names to remove"""
-        assert alltrue([c in self.variables for c in coords]), \
-               "Variable name %s doesn't exist"%c
+        assert alltrue(
+            [c in self.variables for c in coords]
+        ), f"Variable name {c} doesn't exist"
         assert len(coords) < self.dimension, "Cannot delete every variable!"
         self.coordnames = remain(self.coordnames, coords)
         self._name_ix_map = invertMap(self.coordnames)
@@ -345,8 +339,7 @@ class Trajectory(object):
         if self._parameterized:
             new_t_end = t_vals[idx]
             # adjust own independent variable
-            if self.globalt0 > new_t_end:
-                self.globalt0 = new_t_end
+            self.globalt0 = min(self.globalt0, new_t_end)
             self.indepdomain.set([self.indepdomain[0], new_t_end])
 
     def truncate_to_indepvar(self, t):
@@ -378,7 +371,7 @@ class Trajectory(object):
         elif isinstance(coords, str):
             coordlist = [coords]
         elif isinstance(coords, _seq_types):
-            if all([isinstance(c, str) for c in coords]):
+            if all(isinstance(c, str) for c in coords):
                 coordlist = [v for v in self.coordnames if v in coords]
                 if asmap:
                     # allow independent variable name to be listed now
@@ -388,7 +381,7 @@ class Trajectory(object):
                 if remain(coords, test_names) != []:
                     print("Valid coordinate names:%r" % self.coordnames)
                     raise ValueError("Invalid coordinate names passed")
-            elif any([isinstance(c, str) for c in coords]):
+            elif any(isinstance(c, str) for c in coords):
                 raise TypeError("Cannot mix string and numeric values in "
                                   "coords")
             else:
@@ -412,19 +405,15 @@ class Trajectory(object):
             if len(t) == 0:
                 raise ValueError("No independent variable value")
             # ensure is an array so that we can subtract globalt0 from all
-            if asGlobalTime and not asmap:
-                indepvals = array(t) - self.globalt0
-            else:
-                # variable object will accept any sequence type
-                indepvals = t
+            indepvals = array(t) - self.globalt0 if asGlobalTime and not asmap else t
             try:
                 vals = [v(indepvals, checklevel) \
-                        for v in [self.variables[vn] for vn in coordlist]]
+                            for v in [self.variables[vn] for vn in coordlist]]
             except:
                 if checklevel > 1:
                     print("\nProblem calling with coords: %r" % coordlist)
                     print("Independent variable values: %r" % indepvals)
-                    print("Containment:" + self.indepdomain.contains(t))
+                    print(f"Containment:{self.indepdomain.contains(t)}")
                     try:
                         print(self.variables[coordlist[0]].indepdomain.get())
                         print(self.variables[coordlist[0]].depdomain.get())
@@ -451,23 +440,28 @@ class Trajectory(object):
             #else:
             offset = self.globalt0
             return self._FScompatibleNamesInv(
-               Pointset({'coordarray': vals,
-                         'coordnames': coordlist,
-                         'coordtype': self.coordtype,
-                         'indepvararray': array(indepvals)+offset,
-                         'norm': self._normord,
-                         'name': self.name + "_sample"}))
+                Pointset(
+                    {
+                        'coordarray': vals,
+                        'coordnames': coordlist,
+                        'coordtype': self.coordtype,
+                        'indepvararray': array(indepvals) + offset,
+                        'norm': self._normord,
+                        'name': f"{self.name}_sample",
+                    }
+                )
+            )
         else:
             if asGlobalTime and not asmap:
                 t = t - self.globalt0
             try:
                 varvals = [v(t, checklevel) for v in \
-                                 [self.variables[vn] for vn in coordlist]]
+                                     [self.variables[vn] for vn in coordlist]]
             except:
                 if checklevel > 1:
                     print("\nProblem calling with coords: %r" % coordlist)
                     print("Independent variable values:", t)
-                    print("Containment: %s" % self.indepdomain.contains(t))
+                    print(f"Containment: {self.indepdomain.contains(t)}")
                     try:
                         print(self.variables[coordlist[0]].indepdomain.get())
                         print(self.variables[coordlist[0]].depdomain.get())
@@ -512,17 +506,11 @@ class Trajectory(object):
             coords = self.coordnames
         if not isinstance(coords, list):
             raise TypeError('coords argument must be a list')
-        meshdict = {}
-        if FScompat:
-            cs = self._FScompatibleNames(coords)
-        else:
-            cs = coords
-        for varname in cs:
-            meshdict[varname] = self.variables[varname].underlyingMesh()
-        if FScompat:
-            return self._FScompatibleNamesInv(meshdict)
-        else:
-            return meshdict
+        cs = self._FScompatibleNames(coords) if FScompat else coords
+        meshdict = {
+            varname: self.variables[varname].underlyingMesh() for varname in cs
+        }
+        return self._FScompatibleNamesInv(meshdict) if FScompat else meshdict
 
 
     def sample(self, coords=None, dt=None, tlo=None, thi=None,

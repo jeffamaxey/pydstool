@@ -34,11 +34,12 @@ class VarDiagnostics(Diagnostics):
             output = "Warnings:"
             for (i,d) in self.warnings:
                 if d is None:
-                    output += "Independent variable value %s was out of "% i + \
-                          "bounds"
+                    output += f"Independent variable value {i} was out of bounds"
                 else:
-                    output += "Dependent variable value %s was out of " % s + \
-                          "bounds at independent variable value %s" % i
+                    output += (
+                        f"Dependent variable value {s} was out of "
+                        + f"bounds at independent variable value {i}"
+                    )
         else:
             output = ''
         return output
@@ -58,10 +59,7 @@ def pointset_to_vars(pts, discrete=True):
     if isparameterized(pts):
         indepvar = pts.indepvararray
         indepvarname = pts.indepvarname
-        if discrete:
-            indepvartype = int
-        else:
-            indepvartype = float
+        indepvartype = int if discrete else float
         indepdomain = Interval(pts.indepvarname, indepvartype,
                                extent(pts.indepvararray),
                                abseps=pts._abseps)
@@ -88,10 +86,7 @@ def numeric_to_vars(vals, coordnames, indepvar=None, indepvarname='t',
     vars = {}
     if indepvar is None:
         for i, c in enumerate(coordnames):
-            if all_types_float:
-                vartype = float
-            else:
-                vartype = array(vals[i]).dtype.type
+            vartype = float if all_types_float else array(vals[i]).dtype.type
             if discrete:
                 vars[c] = Variable(outputdata=Pointset({'coordnames': c,
                                                     'coordarray': vals[i],
@@ -110,20 +105,13 @@ def numeric_to_vars(vals, coordnames, indepvar=None, indepvarname='t',
             indepvartype = asarray(indepvar).dtype.type
         if indepdomain is None:
             indepdomain = indepvarname
+        elif isinstance(indepdomain, Interval):
+            assert indepvarname == indepdomain.name, "Indep varname mismatch"
         else:
-            if isinstance(indepdomain, Interval):
-                assert indepvarname == indepdomain.name, "Indep varname mismatch"
-            else:
-                if discrete:
-                    var_type = int
-                else:
-                    var_type = float
-                indepdomain = Interval(indepvarname, var_type, indepdomain)
+            var_type = int if discrete else float
+            indepdomain = Interval(indepvarname, var_type, indepdomain)
         for i, c in enumerate(coordnames):
-            if all_types_float:
-                vartype = float
-            else:
-                vartype = array(vals[i]).dtype.type
+            vartype = float if all_types_float else array(vals[i]).dtype.type
             if discrete:
                 vars[c] = Variable(outputdata=Pointset({'coordnames': c,
                                                 'coordarray': vals[i],
@@ -211,17 +199,11 @@ class Variable(object):
 
 
     def _auxfn_heav(self, parsinps, x):
-        if x>0:
-            return 1
-        else:
-            return 0
+        return 1 if x>0 else 0
 
 
     def _auxfn_if(self, parsinps, c, e1, e2):
-        if c:
-            return e1
-        else:
-            return e2
+        return e1 if c else e2
 
 
     def _auxfn_getindex(self, parsinps, varname):
@@ -371,11 +353,11 @@ class Variable(object):
             self.indepdomain.set([self.indepdomain[0], new_t_end])
         else:
             # ndarray type
-            self.indepdomain = self.indepdomain[0:idx]
+            self.indepdomain = self.indepdomain[:idx]
         # adjust depdomain for array type of dep domain
         # (nothing to change for Interval type)
         if isinstance(self.depdomain, ndarray):
-            self.depdomain = self.depdomain[0:idx]
+            self.depdomain = self.depdomain[:idx]
         # adjust trajirange and trajdrange
         self._setRanges(self.depdomain._abseps)
 
@@ -466,7 +448,7 @@ class Variable(object):
                 except ValueError:
                     self.initialconditions = {self.coordname: NaN}
                 except TypeError:
-                    print("Debugging info: self.output = %s" % self.output)
+                    print(f"Debugging info: self.output = {self.output}")
                     raise
             else:
                 self.initialconditions = ics
@@ -497,12 +479,12 @@ class Variable(object):
                 self.indepvartype = outputdata.indepvartype
                 if self.indepdomain is not None:
                     for v in outputdata[self.indepvarname]:
-                        if not v in self.indepdomain:
+                        if v not in self.indepdomain:
                             raise ValueError("New Pointset data violates "
                                "independent variable domain already specified")
                 if self.depdomain is not None:
                     for v in outputdata[self.coordname]:
-                        if not v in self.depdomain:
+                        if v not in self.depdomain:
                             raise ValueError("New Pointset data violates "
                                "dependent variable domain already specified")
                 self._setRanges(abseps)
@@ -517,7 +499,7 @@ class Variable(object):
             self.defined = False
         else:
             raise TypeError("Invalid type for data argument: " \
-                              +str(type(outputdata)))
+                                  +str(type(outputdata)))
 
 
     def setIndepdomain(self, indepdomain, abseps=None):
@@ -532,53 +514,55 @@ class Variable(object):
                 self.indepdomain = Interval(self.indepvarname, float,
                                            [-Inf, Inf], abseps=abseps)
             self.indepvartype = float
-        else:
-            if isinstance(indepdomain, Interval):
-                if self.trajirange:
-                    if indepdomain.contains(self.trajirange) is notcontained:
-                        raise ValueError("Cannot set independent variable"
-                                         " domain inside current trajectory's"
-                                         " range")
-                self.indepdomain = indepdomain
-                self.indepvarname = indepdomain.name
-                self.indepvartype = _num_name2type[indepdomain.typestr]
-            elif isinstance(indepdomain, dict):
-                # enumerated discrete domains
-                assert len(indepdomain) == 1, "Independent variable " \
+        elif isinstance(indepdomain, Interval):
+            if (
+                self.trajirange
+                and indepdomain.contains(self.trajirange) is notcontained
+            ):
+                raise ValueError("Cannot set independent variable"
+                                 " domain inside current trajectory's"
+                                 " range")
+            self.indepdomain = indepdomain
+            self.indepvarname = indepdomain.name
+            self.indepvartype = _num_name2type[indepdomain.typestr]
+        elif isinstance(indepdomain, dict):
+            # enumerated discrete domains
+            assert len(indepdomain) == 1, "Independent variable " \
                                          "dictionary must have only 1 entry"
-                d = list(indepdomain.values())[0]
-                assert all(isfinite(d)), "Independent variable values must be" \
+            d = list(indepdomain.values())[0]
+            assert all(isfinite(d)), "Independent variable values must be" \
                                          " finite"
-                if self.trajirange:
-                    assert self.trajirange[0] in d
-                    assert self.trajirange[1] in d
-                self.indepvarname = list(indepdomain.keys())[0]
-                if isinstance(d, (list, tuple)):
-                    if self.coordtype is not None:
-                        self.indepdomain = array(d, self.coordtype)
-                    else:
-                        self.indepdomain = array(d)
-                elif isinstance(d, ndarray):
-                    da = array(d)
-                    if self.indepvartype is not None and \
+            if self.trajirange:
+                assert self.trajirange[0] in d
+                assert self.trajirange[1] in d
+            self.indepvarname = list(indepdomain.keys())[0]
+            if isinstance(d, (list, tuple)):
+                self.indepdomain = (
+                    array(d, self.coordtype)
+                    if self.coordtype is not None
+                    else array(d)
+                )
+            elif isinstance(d, ndarray):
+                da = array(d)
+                if self.indepvartype is not None and \
                        self.indepvartype != da.dtype.type:
-                        raise TypeError("Mismatch between type of indepdomain "
-                                          "argument and Pointset data")
-                    else:
-                        self.indepdomain = da
+                    raise TypeError("Mismatch between type of indepdomain "
+                                      "argument and Pointset data")
                 else:
-                    raise TypeError("Invalid type for independent "
-                                      "variable domain")
-                # assert this after self.indepdomain has been made an array
-                # because isincreasing is most efficient on already-created
-                # arrays
-                assert isincreasing(self.indepdomain), \
-                       "Independent variable values must be increasing"
-                self.indepvartype = self.indepdomain.dtype.type
+                    self.indepdomain = da
             else:
-                print("Independent variable argument domain was: %r" % indepdomain)
-                raise TypeError("Invalid type for independent variable "
-                                  "domain")
+                raise TypeError("Invalid type for independent "
+                                  "variable domain")
+            # assert this after self.indepdomain has been made an array
+            # because isincreasing is most efficient on already-created
+            # arrays
+            assert isincreasing(self.indepdomain), \
+                       "Independent variable values must be increasing"
+            self.indepvartype = self.indepdomain.dtype.type
+        else:
+            print("Independent variable argument domain was: %r" % indepdomain)
+            raise TypeError("Invalid type for independent variable "
+                              "domain")
 
 
     def setDepdomain(self, depdomain, abseps=None):
@@ -594,36 +578,33 @@ class Variable(object):
                                                  self.coordtype,
                                                  _num_maxmin[self.coordtype],
                                              abseps=abseps)
+            elif isinstance(self.output, interpclass) and \
+                       isinstance(self.depdomain, Interval):
+                self.depdomain.name = depdomain
             else:
-                # If interp functions supplied then don't have a name for
-                # Interval yet, so update it.
-                if isinstance(self.output, interpclass) and \
-                   isinstance(self.depdomain, Interval):
-                    self.depdomain.name = depdomain
-                else:
-                    assert isinstance(self.output, Pointset)
-                    self.diagnostics.warnings.append((self.depdomain.name,
-                                          "Dependent variable already named. "
-                                          "Ignoring user-supplied name."))
+                assert isinstance(self.output, Pointset)
+                self.diagnostics.warnings.append((self.depdomain.name,
+                                      "Dependent variable already named. "
+                                      "Ignoring user-supplied name."))
         else:
             if isinstance(depdomain, Interval):
-                if self.trajdrange:
-                    if depdomain.contains(self.trajdrange) is notcontained:
-                        raise ValueError("Cannot set dependent variable "
-                                          "domain inside current trajectory's "
-                                          "range")
+                if (
+                    self.trajdrange
+                    and depdomain.contains(self.trajdrange) is notcontained
+                ):
+                    raise ValueError("Cannot set dependent variable "
+                                      "domain inside current trajectory's "
+                                      "range")
                 self.depdomain = depdomain
                 self.coordname = depdomain.name
                 if self.coordtype is None:
                     self.coordtype = depdomain.type
-                elif self.coordtype == depdomain.type:
-                    pass
-                else:
+                elif self.coordtype != depdomain.type:
                     raise TypeError("Mismatch between type of depdomain "
                                       "argument and Pointset coord data")
             elif isinstance(depdomain, dict):
                 assert len(depdomain) == 1, \
-                       "Depend variables dictionary must have only 1 entry"
+                           "Depend variables dictionary must have only 1 entry"
                 d = list(depdomain.values())[0]
                 if self.trajdrange:
                     assert self.trajdrange[0] in d
@@ -639,7 +620,7 @@ class Variable(object):
                 elif isinstance(d, ndarray):
                     da = array(d)
                     if self.coordtype is not None and \
-                       self.coordtype != da.dtype.type:
+                           self.coordtype != da.dtype.type:
                         raise TypeError("Mismatch between type of depdomain "
                                           "argument and Pointset coord data")
                     else:
@@ -653,9 +634,9 @@ class Variable(object):
                 raise TypeError("Invalid type for dependent variable domain")
             if isinstance(self.output, Pointset):
                 assert self.coordname == self.output.coordnames[0], \
-                       "Mismatch between Pointset coord name and declared name"
+                           "Mismatch between Pointset coord name and declared name"
                 assert self.indepvarname == self.output.indepvarname, \
-                       ("Mismatch between Pointset independent variable name "
+                           ("Mismatch between Pointset independent variable name "
                         "and declared name")
 
 

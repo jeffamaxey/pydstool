@@ -76,12 +76,9 @@ class feature(object):
             res = self.name == other.name
         except AttributeError:
             return False
-        if hasattr(self, 'subfeatures'):
-            if hasattr(other, 'subfeatures'):
-                res = res and self.subfeatures == other.subfeatures
-            else:
-                return False
-        elif hasattr(other, 'subfeatures'):
+        if hasattr(self, 'subfeatures') and hasattr(other, 'subfeatures'):
+            res = res and self.subfeatures == other.subfeatures
+        elif hasattr(self, 'subfeatures') or hasattr(other, 'subfeatures'):
             return False
         return res
 
@@ -101,14 +98,13 @@ class feature(object):
         except KeyboardInterrupt:
             raise
         except:
-            display_error = self.pars.verbose_level > 0 or self.pars.debug
-            if display_error:
+            if display_error := self.pars.verbose_level > 0 or self.pars.debug:
                 exceptionType, exceptionValue, exceptionTraceback = sys.exc_info()
                 print("******************************************")
-                print("Problem evaluating feature:" + self.name)
-                print("  %s %s" % (exceptionType, exceptionValue))
+                print(f"Problem evaluating feature:{self.name}")
+                print(f"  {exceptionType} {exceptionValue}")
                 for line in traceback.format_exc().splitlines()[-12:-1]:
-                    print("   " + line)
+                    print(f"   {line}")
                 print("  originally on line:%d" % traceback.tb_lineno(exceptionTraceback))
                 if self.pars.debug:   #and self.pars.verbose_level > 1:
                     raise
@@ -117,11 +113,11 @@ class feature(object):
             satisfied = False
             if hasattr(self, 'metric'):
                 self.metric.results = self.pars.penalty * \
-                                  npy.ones((self.metric_len,), float)
+                                      npy.ones((self.metric_len,), float)
             for sf in self.subfeatures:
                 if hasattr(sf, 'metric'):
                     sf.metric.results = self.pars.penalty * \
-                      npy.ones((sf.metric_len,), float)
+                          npy.ones((sf.metric_len,), float)
         if satisfied:
             self.finish(target)
         self.results.satisfied = satisfied
@@ -186,7 +182,7 @@ class feature_leaf(feature):
             feats.append(self)
 
     def __str__(self):
-        return "Feature %s"%self.name
+        return f"Feature {self.name}"
 
     __repr__ = __str__
 
@@ -241,9 +237,9 @@ class feature_node(feature):
             sf._residual_info(feats, sizes)
 
     def __str__(self):
-        s = "Feature %s "%self.name
-        if len(list(self._namemap.keys())) > 0:
-            s += "- " + str(list(self._namemap.keys()))
+        s = f"Feature {self.name} "
+        if list(self._namemap.keys()):
+            s += f"- {list(self._namemap.keys())}"
         return s
 
     __repr__ = __str__
@@ -312,10 +308,8 @@ class feature_node(feature):
             satisfied = satisfied and new_result
             if error_raised:
                 print(" ... error raised")
-                if hasattr(self, 'metric'):
-                    # kludgy penalty function in lieu of something smarter
-                    if sf.metric.results is None:
-                        sf.metric.results = self.pars.penalty * \
+                if hasattr(self, 'metric') and sf.metric.results is None:
+                    sf.metric.results = self.pars.penalty * \
                           npy.ones((sf.metric_len,),float)
             else:
                 self.results.update(sf.results)
@@ -459,8 +453,8 @@ class condition(object):
 
     def __str__(self):
         s = "Condition "
-        if len(list(self.namemap.keys())) > 0:
-            s += "- " + str(list(self.namemap.keys()))
+        if list(self.namemap.keys()):
+            s += f"- {list(self.namemap.keys())}"
         return s
 
     __repr__ = __str__
@@ -471,10 +465,7 @@ class condition(object):
             f_ix = f._find_idx()
             if f_ix is not None and f_ix < min_ix:
                 min_ix = f_ix
-        if npy.isfinite(min_ix):
-            return min_ix
-        else:
-            return None
+        return min_ix if npy.isfinite(min_ix) else None
 
     def _residual_info(self):
         """Update metric information used for residual / objective function,
@@ -526,12 +517,12 @@ class context(object):
         metric_features = {}
         res_feature_list = []
         tot_size = 0
-        for test_mi, ref_mi_class in self.interfaces.items():
+        for test_mi in self.interfaces:
             # list of suitable features for each test_mi
             metric_features[test_mi] = test_mi.conditions._residual_info()
             tot_size += metric_features[test_mi]['total_size']
             res_feature_list.extend([(test_mi, f) for f in \
-                                     metric_features[test_mi]['features'].keys()])
+                                         metric_features[test_mi]['features'].keys()])
         self.metric_features = metric_features
         self.res_feature_list = res_feature_list
         self.res_len = tot_size
@@ -610,14 +601,19 @@ class context(object):
                     continue
                 ix0, ix1 = self.weight_index_mapping[test_mi][f]
                 len_w = ix1-ix0
-                f_str = "  "+f.name
+                f_str = f"  {f.name}"
                 # '  unweighted:' is 13 chars long
                 extra_space_w = " "*max([0, 13-len(f_str)])
                 extra_space_unw = " "*max([0, len(f_str)-13])
                 print(f_str + extra_space_w  + "%r" % resvec[i:i+len_w])
                 try:
-                    print("  unweighted:" + extra_space_unw +
-                           "%r" % (resvec[i:i+len_w]/self.weights[ix0:ix1]))
+                    print(
+                        (
+                            f"  unweighted:{extra_space_unw}"
+                            + "%r"
+                            % (resvec[i : i + len_w] / self.weights[ix0:ix1])
+                        )
+                    )
                 except ZeroDivisionError:
                     print("  (unweighted values unavailable)")
                 i += len_w
@@ -662,11 +658,10 @@ class context(object):
             except:
                 if self.debug_mode:
                     raise
-                else:
-                    print("******************************************")
-                    print("Problem evaluating interface %s on %s" % (test_mi,ref_mi))
-                    print("  %s %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                    new_result = False
+                print("******************************************")
+                print(f"Problem evaluating interface {test_mi} on {ref_mi}")
+                print(f"  {sys.exc_info()[0]} {sys.exc_info()[1]}")
+                new_result = False
             # must create new_res first, to ensure all interfaces are
             # evaluated (to create their results for possible post-processing)
             result = result and new_result
@@ -686,13 +681,11 @@ class context(object):
         # discard the boolean, just compute the residuals through the calls to
         # metric, and access them through the feature list
         self.evaluate(model)
-        raw_residual = npy.concatenate(tuple([mf[1].metric.results for \
-                                     mf in self.res_feature_list]))
+        raw_residual = npy.concatenate(
+            tuple(mf[1].metric.results for mf in self.res_feature_list)
+        )
         residual = process_raw_residual(raw_residual, self.weights)
-        if include_raw:
-            return residual, raw_residual
-        else:
-            return residual
+        return (residual, raw_residual) if include_raw else residual
 
 
 def process_raw_residual(raw_residual, weights):
@@ -724,7 +717,9 @@ class binary_feature(ql_feature_leaf):
         except KeyboardInterrupt:
             raise
         except:
-            print("Failed to find trajectory values for given variable name: %s"%self.pars.varname)
+            print(
+                f"Failed to find trajectory values for given variable name: {self.pars.varname}"
+            )
             raise
         self.results.output = pts
         return all(self.results.output==1)
@@ -735,12 +730,12 @@ class binary_feature(ql_feature_leaf):
             return None
         res = self.results.output
         if res[0] == 1:
-            adjusted_res = list((res - 1) != 0)
-        else:
-            if 1 not in res:
-                # never goes to excited state so no index to return
-                raise RuntimeError
+            adjusted_res = list(res != 1)
+        elif 1 in res:
             adjusted_res = list(res != 0)
+        else:
+            # never goes to excited state so no index to return
+            raise RuntimeError
         # find first index at which value is non-zero
         # should never raise ValueError because this method is
         # only run if there was a sign change found
@@ -829,7 +824,7 @@ class GeneratorInterface(dsInterface):
         if key in self._setkeys:
             self.model.set(**{key:value})
         else:
-            raise KeyError("Invalid or unsupported 'set' key: %s"%key)
+            raise KeyError(f"Invalid or unsupported 'set' key: {key}")
 
     def Rhs(self, t, xdict, pdict):
         """Direct access to a generator's Rhs function."""
@@ -880,21 +875,19 @@ class ModelInterface(dsInterface):
         if self._initiator_cache is None:
             if ics is None:
                 raise ValueError("Must pass initial conditions")
-            else:
-                initiator = self.model._findTrajInitiator(None, 0,
-                                                t0, dict(ics))[0]
-                self._initiator_cache = (ics, t0, initiator)
+            initiator = self.model._findTrajInitiator(None, 0,
+                                            t0, dict(ics))[0]
+            self._initiator_cache = (ics, t0, initiator)
+        elif npy.alltrue(self._initiator_cache[0] == ics) and \
+                   self._initiator_cache[1] == t0:
+            ics, t0, initiator = self._initiator_cache
+        elif ics is None:
+            raise ValueError("Must pass initial conditions")
         else:
-            if npy.alltrue(self._initiator_cache[0] == ics) and \
-               self._initiator_cache[1] == t0:
-                ics, t0, initiator = self._initiator_cache
-            elif ics is None:
-                raise ValueError("Must pass initial conditions")
-            else:
-                # initial conditions or t0 don't match -- don't use cache
-                initiator = self.model._findTrajInitiator(None, 0,
-                                                t0, dict(ics))[0]
-                self._initiator_cache = (ics, t0, initiator)
+            # initial conditions or t0 don't match -- don't use cache
+            initiator = self.model._findTrajInitiator(None, 0,
+                                            t0, dict(ics))[0]
+            self._initiator_cache = (ics, t0, initiator)
         return (ics, t0, initiator)
 
     def set(self, key, value, ics=None, t0=0):
@@ -906,7 +899,7 @@ class ModelInterface(dsInterface):
             initiator.set(key, value, ics, t0)
             initiator.model.set(**{key:value})
         else:
-            raise KeyError("Invalid or unsupported 'set' key: %s"%key)
+            raise KeyError(f"Invalid or unsupported 'set' key: {key}")
 
     def get(self, key, ics=None, t0=0):
         ics, t0, initiator = self._get_initiator_cache(ics, t0)
@@ -914,7 +907,7 @@ class ModelInterface(dsInterface):
         try:
             return initiator.get(key, ics, t0)
         except AttributeError:
-            raise ValueError("Invalid or unsupported 'get' key: %s"%key)
+            raise ValueError(f"Invalid or unsupported 'get' key: {key}")
 
     def Rhs(self, t, xdict, pdict):
         """Direct access to a generator's Rhs function."""
@@ -983,18 +976,17 @@ class ModelInterface(dsInterface):
         e.g. because of a known change in model parameters, ics, etc.
         """
         assert isinstance(target, ModelInterface), \
-               "Target argument must be another interface object"
+                   "Target argument must be another interface object"
         if len(self.compatibleInterfaces) > 0 and \
-             target.__class__.__name__ not in self.compatibleInterfaces \
-                and not npy.sometrue([common.compareBaseClass(target, ctype) \
-                                     for ctype in self.compatibleInterfaces]):
+                 target.__class__.__name__ not in self.compatibleInterfaces \
+                    and not npy.sometrue([common.compareBaseClass(target, ctype) \
+                                         for ctype in self.compatibleInterfaces]):
             raise ValueError("Target interface not of compatible type")
         try:
             self.conditions
         except AttributeError:
             self.setup_conditions(conditions, self.get_test_traj())
-        force = force or target.test_traj is None
-        if force:
+        if force := force or target.test_traj is None:
             # discard returned traj here (still accessible via target.test_traj)
             target.get_test_traj(force=force)
         self.prepare_conditions(target)
@@ -1063,18 +1055,18 @@ class intModelInterface(ModelInterface):
             # this verifies that the traj that would be computed
             # already exists
             return False
+        try:
+            self.compute_traj(need_init=False, new_args=new_args)
+        except KeyboardInterrupt:
+            raise
+        except:
+            print(
+                f"Model interface compute_traj method for model '{self.model.name}' failed"
+            )
+            print(f"{sys.exc_info()[0]} {sys.exc_info()[1]}")
+            return False
         else:
-            try:
-                self.compute_traj(need_init=False, new_args=new_args)
-            except KeyboardInterrupt:
-                raise
-            except:
-                print("Model interface compute_traj method for model " + \
-                      "'%s' failed" % self.model.name)
-                print("%s %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                return False
-            else:
-                return True
+            return True
 
     def has_test_traj(self):
         return self.test_traj is not None

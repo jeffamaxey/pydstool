@@ -19,10 +19,7 @@ class PyDSTool_Error(Exception):
 
 class PyDSTool_UncertainValueError(PyDSTool_Error):
     def __init__(self, value, varval=None):
-        if varval is None:
-            valstr = ''
-        else:
-            valstr = ' at variable = '+str(varval)
+        valstr = '' if varval is None else f' at variable = {str(varval)}'
         self.varval = varval
         PyDSTool_Error.__init__(self, value+valstr)
 

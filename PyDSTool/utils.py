@@ -54,16 +54,14 @@ _logfile = os.devnull
 
 def makeMfileFunction(name, argname, defs):
     """defs is a dictionary of left-hand side -> right-hand side definitions"""
-    # writeout file <name>.m
-    mfile = open(name+".m", 'w')
-    mfile.write("function %s = %s(%s)\n"%(name,name,argname))
-    for k, v in defs.items():
-        if k != name:
-            mfile.write("%s = %s;\n"%(k,v))
-    # now the final definition of tau_recip or inf
-    mfile.write("%s = %s;\n"%(name,defs[name]))
-    mfile.write("return\n")
-    mfile.close()
+    with open(f"{name}.m", 'w') as mfile:
+        mfile.write("function %s = %s(%s)\n"%(name,name,argname))
+        for k, v in defs.items():
+            if k != name:
+                mfile.write("%s = %s;\n"%(k,v))
+        # now the final definition of tau_recip or inf
+        mfile.write("%s = %s;\n"%(name,defs[name]))
+        mfile.write("return\n")
 
 
 def info(x, specName="Contents", offset=1, recurseDepth=1,
@@ -74,9 +72,9 @@ def info(x, specName="Contents", offset=1, recurseDepth=1,
     if recurseDepth == 1:
         if not _repeatFirstTime:
             # first time through
-            print("Information for " + specName + "\n")
+            print(f"Information for {specName}" + "\n")
     else:
-        print(specName + ":", end=' ')
+        print(f"{specName}:", end=' ')
     if x.__class__ is type:
         return
     if hasattr(x, 'items'):
@@ -98,22 +96,21 @@ def info(x, specName="Contents", offset=1, recurseDepth=1,
                     vStrList = ['< no information >']
                 elif len(vStrList)==1 and vStrList[0] == '':
                     vStrList = ['< empty >']
-                outStrList = [basestr+": "]
+                outStrList = [f"{basestr}: "]
                 for i in range(len(vStrList)):
                     if len(vStrList[i] + outStrList[-1]) < 78:
                         outStrList[-1] += ", "*(i>0) + vStrList[i]
+                    elif i>0:
+                        if i != len(vStrList):
+                            # add trailing comma to previous line
+                            outStrList[-1] += ","
+                        # start on new line
+                        outStrList.append(" "*(len(kstr)+3) + vStrList[i])
                     else:
-                        if i>0:
-                            if i != len(vStrList):
-                                # add trailing comma to previous line
-                                outStrList[-1] += ","
-                            # start on new line
-                            outStrList.append(" "*(len(kstr)+3) + vStrList[i])
-                        else:
-                            # too long for line and string has no commas
-                            # could work harder here, but for now, just include
-                            # the long line
-                            outStrList[-1] += vStrList[i]
+                        # too long for line and string has no commas
+                        # could work harder here, but for now, just include
+                        # the long line
+                        outStrList[-1] += vStrList[i]
                 if recurseDepth==1 and len(outStrList)>1:
                     # print an extra space between topmost level entries
                     # provided those entries occupy more than one line.
@@ -125,7 +122,7 @@ def info(x, specName="Contents", offset=1, recurseDepth=1,
                      recurseDepthLimit, True)
     else:
         xstr = repr(x)
-        if xstr == '':
+        if not xstr:
             xstr = '< no information >'
         print(xstr)
 
@@ -151,15 +148,18 @@ def makeImplicitFunc(f, x0, fprime=None, extrafargs=(), xtolval=1e-8,
     definition."""
 
     if solmethod == 'bisect':
-        assert isinstance(x0, _seq_types), \
-               "Invalid type '"+str(type(x0))+"' for x0 = "+str(x0)
+        assert isinstance(
+            x0, _seq_types
+        ), f"Invalid type '{str(type(x0))}' for x0 = {str(x0)}"
         assert len(x0) == 2
     elif solmethod == 'fsolve':
-        assert isinstance(x0, (_seq_types, _num_types)), \
-               "Invalid type '"+str(type(x0))+"' for x0 = "+str(x0)
+        assert isinstance(
+            x0, (_seq_types, _num_types)
+        ), f"Invalid type '{str(type(x0))}' for x0 = {str(x0)}"
     else:
-        assert isinstance(x0, _num_types), \
-               "Invalid type '"+str(type(x0))+"' for x0 = "+str(x0)
+        assert isinstance(
+            x0, _num_types
+        ), f"Invalid type '{str(type(x0))}' for x0 = {str(x0)}"
 
     # define the functions that could be used
     # scipy signatures use y instead of t, but this naming is consistent
@@ -217,11 +217,8 @@ def makeImplicitFunc(f, x0, fprime=None, extrafargs=(), xtolval=1e-8,
                     return res
 
     except TypeError as e:
-        if solmethod == 'bisect':
-            infostr = " (did you specify a pair for x0?)"
-        else:
-            infostr = ""
-        raise TypeError("Could not create function" +infostr + ": "+str(e))
+        infostr = " (did you specify a pair for x0?)" if solmethod == 'bisect' else ""
+        raise TypeError(f"Could not create function{infostr}: {str(e)}")
 
     if solmethod == 'newton':
         return newton_fn
@@ -273,10 +270,7 @@ def findClosestPointIndex(pt, target, tol=Inf, in_order=True):
             lo_off = 1
             # insertion offset index
             ins_off = 1
-            if index < len(target):
-                hi_off = 1
-            else:
-                hi_off = 0
+            hi_off = 1 if index < len(target) else 0
         else:
             lo_off = 0
             hi_off = 2
@@ -297,13 +291,10 @@ def findClosestPointIndex(pt, target, tol=Inf, in_order=True):
                 if not all(ismonotonic(new_nhood[:,d]) for d in dim_range):
                     raise ValueError("Cannot add point in order, try deactivating the in_order option")
 
-    if in_order:
+    if not in_order and dists[index] < tol or in_order:
         return index
     else:
-        if dists[index] < tol:
-            return index
-        else:
-            raise ValueError("No index found within distance tolerance")
+        raise ValueError("No index found within distance tolerance")
 
 
 def findClosestArray(input_array, target_array, tol):
@@ -411,10 +402,7 @@ def find(x, v, next_largest=1, indices=None):
     try:
         ix = eqmask.index(1)
     except ValueError:
-        if next_largest:
-            mask=(xs<v).tolist()
-        else:
-            mask=(xs>v).tolist()
+        mask = (xs<v).tolist() if next_largest else (xs>v).tolist()
         try:
             ix=min([max([0,mask.index(1-next_largest)+next_largest-1]),len(mask)-1])
         except ValueError:
@@ -454,11 +442,7 @@ def orderEventData(edict, evnames=None, nonames=False, bytime=False):
                 etuplelist.extend([(t,evname) for t in tlist])
         # sort by times
         etuplelist.sort()
-        if bytime:
-            return etuplelist
-        else:
-            # swap back to get event names as first tuple entry
-            return [(evname,t) for (t,evname) in etuplelist]
+        return etuplelist if bytime else [(evname,t) for (t,evname) in etuplelist]
 
 ## ------------------------------------------------------------
 ## Generator wrapping utilities
@@ -562,7 +546,7 @@ def progressBar(i, total, width=50):
     """
     percent = float(i)/total
     dots = int(percent*width)
-    progress = str('[').ljust(dots+1, '-')
+    progress = '['.ljust(dots+1, '-')
     sys.stdout.write('\r'+progress.ljust(width, ' ')+str('] %.2f%%' % (percent*100.)))
     sys.stdout.flush()
 
@@ -580,23 +564,21 @@ def saveObjects(objlist, filename, force=False):
 
     # passing protocol = -1 to pickle means it uses highest available
     # protocol (e.g. binary format)
-    if not force:
-        if os.path.isfile(filename):
-            raise ValueError("File '" + filename + "' already exists")
-    pklfile = open(filename, 'wb')
-    opt = 0
-    if not isinstance(objlist, list):
-        objlist=[objlist]
-    for obj in objlist:
-        try:
-            pickle.dump(obj, pklfile, opt)
-        except:
-            if hasattr(obj, 'name'):
-                print("Failed to save '%s'"%obj.name)
-            else:
-                print("Failed to save object '%s'"%str(obj))
-            raise
-    pklfile.close()
+    if not force and os.path.isfile(filename):
+        raise ValueError(f"File '{filename}' already exists")
+    with open(filename, 'wb') as pklfile:
+        opt = 0
+        if not isinstance(objlist, list):
+            objlist=[objlist]
+        for obj in objlist:
+            try:
+                pickle.dump(obj, pklfile, opt)
+            except:
+                if hasattr(obj, 'name'):
+                    print(f"Failed to save '{obj.name}'")
+                else:
+                    print(f"Failed to save object '{str(obj)}'")
+                raise
 
 
 
@@ -615,7 +597,7 @@ def loadObjects(filename, namelist=None):
     # loop always goes to the end of the file, and pulls out *all*
     # occurrences of the names.
     if not os.path.isfile(filename):
-        raise ValueError("File '" + filename + "' not found")
+        raise ValueError(f"File '{filename}' not found")
     if namelist is None:
         namelist = []
     was_singleton_name = isinstance(namelist, str)
@@ -626,39 +608,31 @@ def loadObjects(filename, namelist=None):
             raise TypeError("namelist must be list of strings or singleton string")
     if not isUniqueSeq(namelist):
         raise ValueError("Names must only appear once in namelist argument")
-    pklfile = open(filename, 'rb')
-    if namelist == []:
-        getall = True
-    else:
-        getall = False
-    objlist = []
-    notDone = True
-    while notDone:
-        try:
-            if getall:
-                objlist.append(pickle.load(pklfile))
-            else:
-                tempobj = pickle.load(pklfile)
-                if hasattr(tempobj, 'name'):
-                    if tempobj.name in namelist:
+    with open(filename, 'rb') as pklfile:
+        getall = namelist == []
+        objlist = []
+        notDone = True
+        while notDone:
+            try:
+                if getall:
+                    objlist.append(pickle.load(pklfile))
+                else:
+                    tempobj = pickle.load(pklfile)
+                    if hasattr(tempobj, 'name') and tempobj.name in namelist:
                         objlist.append(tempobj)
-        except EOFError:
-            notDone = False
-        except:
-            print("Error in un-pickling %s:"%filename)
-            print("Was the object created with an old version of PyDSTool?")
-            pklfile.close()
-            raise
-    pklfile.close()
-    if objlist == []:
+            except EOFError:
+                notDone = False
+            except:
+                print(f"Error in un-pickling {filename}:")
+                print("Was the object created with an old version of PyDSTool?")
+                pklfile.close()
+                raise
+    if not objlist:
         if getall:
             print("No objects found in file")
         else:
             print("No named objects found in file")
-    if was_singleton_name:
-        return objlist[0]
-    else:
-        return objlist
+    return objlist[0] if was_singleton_name else objlist
 
 
 def intersect(a, b):
@@ -715,19 +689,15 @@ def distutil_destination():
     pyname = platform.python_version_tuple()
     machinename = platform.machine()
     if osname == 'linux':
-        destdir = 'src.'+osname+'-'+machinename+'-'+pyname[0] + '.' + pyname[1]
+        return f'src.{osname}-{machinename}-{pyname[0]}.{pyname[1]}'
     elif osname in ['darwin', 'freebsd']:
         # use the same version string as numpy.distutils.core.setup used by ContClass.CompileAutoLib
         osver = get_platform()
-        destdir = 'src.' + osver + '-' +pyname[0] + '.' + pyname[1]
+        return f'src.{osver}-{pyname[0]}.{pyname[1]}'
     elif osname == 'windows':
-        destdir = 'src.win32-'+pyname[0]+'.'+pyname[1]
+        return f'src.win32-{pyname[0]}.{pyname[1]}'
     else:
-        destdir = ''
-    # TEMP for debugging
-    #import os
-    #os.system('echo %s > temp_dist.txt' % (os.path.abspath('.') + " : " + destdir))
-    return destdir
+        return ''
 
 
 def architecture():
@@ -747,10 +717,7 @@ def extra_arch_arg(arglist):
     as argument, based on whether architecture is detected as 32 bit. Otherwise,
     it performs the identity function.
     """
-    if architecture() == 32:
-        return arglist + ['-m32']
-    else:
-        return arglist
+    return arglist + ['-m32'] if architecture() == 32 else arglist
 
 
 def get_lib_extension():
